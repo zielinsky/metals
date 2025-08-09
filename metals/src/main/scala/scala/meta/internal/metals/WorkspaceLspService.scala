@@ -1373,6 +1373,15 @@ class WorkspaceLspService(
       case ServerCommands.GotoTest(textDocumentPositionParams) =>
         getServiceFor(textDocumentPositionParams.getTextDocument().getUri())
           .gotoTest(textDocumentPositionParams)
+      case ServerCommands.ResolveStacktraceLocation(stacktraceLine) =>
+        Future {
+          // Getting the service for focused document and first one otherwise
+          val service =
+            focusedDocument.get().map(getServiceFor).getOrElse(fallbackService)
+          val location = service.resolveStacktraceLocation(stacktraceLine)
+          scribe.debug(s"Resolved stacktrace location: ${location}")
+          location.orNull
+        }.asJavaObject
 
       case ServerCommands.GotoSuperMethod(textDocumentPositionParams) =>
         getServiceFor(textDocumentPositionParams.getTextDocument().getUri())

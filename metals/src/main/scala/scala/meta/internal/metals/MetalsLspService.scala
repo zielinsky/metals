@@ -1791,6 +1791,9 @@ abstract class MetalsLspService(
   def analyzeStackTrace(content: String): Option[ExecuteCommandParams] =
     stacktraceAnalyzer.analyzeCommand(content)
 
+  def resolveStacktraceLocation(stacktraceLine: String): Option[Location] =
+    stacktraceAnalyzer.resolveStacktraceLocationCommand(stacktraceLine)
+
   def findBuildTargetByDisplayName(target: String): Option[b.BuildTarget] =
     buildTargets.findByDisplayName(target)
 
