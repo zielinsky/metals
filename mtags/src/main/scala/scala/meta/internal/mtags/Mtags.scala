@@ -62,11 +62,15 @@ final class Mtags(val config: MtagsConfig = MtagsConfig.default)(implicit
     }
   }
 
-  def indexWithOverrides(
+  def extendedIndexing(
       path: AbsolutePath,
       dialect: Dialect = dialects.Scala213,
       includeMembers: Boolean = false
-  ): (TextDocument, MtagsIndexer.AllOverrides) = {
+  ): (
+      TextDocument,
+      MtagsIndexer.AllOverrides,
+      MtagsIndexer.AllToplevelMembers
+  ) = {
     val input = path.toInput
     val language = input.toJLanguage
     if (language.isJava || language.isScala) {
@@ -93,12 +97,13 @@ final class Mtags(val config: MtagsConfig = MtagsConfig.default)(implicit
           indexer.index()
         )
       val overrides = indexer.overrides()
-      (doc, overrides)
+      val toplevelMembers = indexer.toplevelMembers()
+      (doc, overrides, toplevelMembers)
     } else if (language.isProtobuf) {
       config.protoInstance(input, includeGeneratedSymbols = true).index()
-      (TextDocument(), Nil)
+      (TextDocument(), Nil, Nil)
     } else {
-      (TextDocument(), Nil)
+      (TextDocument(), Nil, Nil)
     }
   }
 
