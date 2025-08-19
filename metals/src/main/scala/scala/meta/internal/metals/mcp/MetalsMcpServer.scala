@@ -1059,7 +1059,7 @@ class MetalsMcpServer(
           .map { _ =>
             new CallToolResult(
               createContent("Scalafix rule run successfully"),
-              true,
+              false,
             )
           }
           .recover { case error =>
