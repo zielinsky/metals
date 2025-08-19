@@ -36,6 +36,8 @@ object Directories {
     RelativePath(".metals").resolve("lib").resolve("java-header-compiler.jar")
   def outDir: RelativePath =
     RelativePath(".metals").resolve("out")
+  def rules: RelativePath =
+    RelativePath(".metals").resolve("rules")
 
   val stacktraceFilename = "stacktrace.scala"
   val dependenciesName = "dependencies"

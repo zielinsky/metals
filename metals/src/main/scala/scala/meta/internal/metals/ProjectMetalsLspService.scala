@@ -31,6 +31,7 @@ import scala.meta.internal.metals.mcp.McpSymbolSearch
 import scala.meta.internal.metals.mcp.McpTestRunner
 import scala.meta.internal.metals.mcp.MetalsMcpServer
 import scala.meta.internal.metals.watcher.FileWatcher
+import scala.meta.internal.metals.mcp.ScalafixLlmRuleProvider
 import scala.meta.internal.metals.watcher.FileWatcherEvent
 import scala.meta.internal.metals.watcher.FileWatcherEvent.EventType
 import scala.meta.internal.metals.watcher.NoopFileWatcher
@@ -284,6 +285,15 @@ class ProjectMetalsLspService(
       mcpSearch,
     )
 
+  val scalafixLlmRuleProvider = new ScalafixLlmRuleProvider(
+    folder,
+    scalafixProvider,
+    () => userConfig,
+    languageClient,
+    buildTargets,
+    scalaVersionSelector,
+  )
+
   def startMcpServer(): Future[Unit] =
     Future {
       if (!isMcpServerRunning.getAndSet(true))
@@ -304,6 +314,7 @@ class ProjectMetalsLspService(
             connectionProvider,
             scalaVersionSelector,
             formattingProvider,
+            scalafixLlmRuleProvider,
           )
         ).run()
     }.recover { case e: Exception =>
