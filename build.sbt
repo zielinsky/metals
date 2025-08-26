@@ -1018,8 +1018,10 @@ lazy val metalsDependencies = project
       "com.olegpy" %% "better-monadic-for" % V.betterMonadicFor,
       "com.lihaoyi" % "mill-contrib-testng" % V.mill intransitive (),
       "org.virtuslab.scala-cli" % "cli_3" % V.scalaCli intransitive (),
-      "ch.epfl.scala" % "bloop-maven-plugin" % V.mavenBloop,
-      "ch.epfl.scala" %% "gradle-bloop" % V.gradleBloop,
+      ("ch.epfl.scala" % "bloop-maven-plugin" % V.mavenBloop)
+        .exclude("com.lihaoyi", "unroll-annotation_2.13"),
+      ("ch.epfl.scala" %% "gradle-bloop" % V.gradleBloop)
+        .exclude("com.lihaoyi", "unroll-annotation_2.13"),
       "com.sourcegraph" % "semanticdb-java" % V.javaSemanticdb,
       "org.foundweekends.giter8" %% "giter8" % V.gitter8Version intransitive (),
     ),
