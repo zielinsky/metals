@@ -136,12 +136,24 @@ class JavaCompletionProvider(
       case _ => false
     }
 
+    val trees = Trees.instance(task)
+    val exprElem = trees.getElement(newPath)
+
+    val isStaticContext =
+      exprElem != null && (exprElem.getKind match {
+        case ElementKind.CLASS | ElementKind.INTERFACE | ElementKind.ENUM |
+            ElementKind.ANNOTATION_TYPE | ElementKind.TYPE_PARAMETER =>
+          true
+        case _ => false
+      })
+
     memberType match {
       case dt: DeclaredType =>
-        completeDeclaredTypeMembers(task, dt, path, isSuperAccess)
+        completeDeclaredTypeMembers(task, dt, path, isSuperAccess, isStaticContext)
       case _: ArrayType => completeArrayType()
       case tv: TypeVariable => completeTypeVariable(task, tv, path)
-      case pkg: PackageType => completePackageType(task, pkg)
+      case pkg: PackageType => 
+        completePackageType(task, pkg)
       case _ => Nil
     }
   }
@@ -270,8 +282,14 @@ class JavaCompletionProvider(
       task: JavacTask,
       declaredType: DeclaredType,
       path: TreePath,
-      isSuperAccess: Boolean = false
+      isSuperAccess: Boolean = false,
+      isStaticContext: Boolean = false
   ): List[CompletionItem] = {
+    val bannedKinds = Set(
+      ElementKind.CONSTRUCTOR,
+      ElementKind.STATIC_INIT,
+      ElementKind.INSTANCE_INIT
+    )
     val declaredElement = declaredType.asElement()
     val members = task.getElements
       .getAllMembers(declaredElement.asInstanceOf[TypeElement])
@@ -294,26 +312,24 @@ class JavaCompletionProvider(
       else None
     val identifier = extractIdentifier
 
-    val completionItems = members.iterator
-      .filter(member =>
-        CompletionFuzzy.matches(identifier, member.getSimpleName.toString)
-      )
-      // We can't call a constructor as a member
-      .filter(member => member.getKind() != ElementKind.CONSTRUCTOR)
-      // Respect private/protected/package-private visibility.
-      // For `super.` access, also allow members accessible through the
-      // enclosing class's type (covers protected members from Object such as
-      // clone() and finalize()).
-      .filter(member =>
-        trees.isAccessible(scope, member, declaredType) ||
-          superAccessType.exists(trees.isAccessible(scope, member, _))
-      )
-      .toList
+    val completionItems = members
+      .filter { member =>
+        val isMatches = CompletionFuzzy.matches(
+          identifier,
+          member.getSimpleName.toString
+        )
+        val isAllowedKind = !bannedKinds(member.getKind())
+        val isStaticMember = member.getModifiers.contains(Modifier.STATIC)
+        val isAccessible = 
+          trees.isAccessible(scope, member, declaredType) ||
+            superAccessType.exists(trees.isAccessible(scope, member, _))
+
+        isMatches && isAllowedKind && isAccessible && (isStaticMember || !isStaticContext)
+      }
       .sortBy { element =>
         memberScore(element, declaredElement)
       }
       .map(completionItem)
-
     completionItems
   }
 

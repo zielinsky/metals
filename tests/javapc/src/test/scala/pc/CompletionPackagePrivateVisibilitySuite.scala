@@ -25,7 +25,7 @@ class CompletionPackagePrivateVisibilitySuite extends BaseJavaCompletionSuite {
     """package example;
       |
       |public class Example1 {
-      |  staticvoid visibilityPackagePrivate2() {}
+      |  static void visibilityPackagePrivate2() {}
       |}
       |class Example2 {
       |  void run() {

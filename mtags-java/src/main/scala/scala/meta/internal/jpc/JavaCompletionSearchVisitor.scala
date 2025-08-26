@@ -15,7 +15,8 @@ class JavaCompletionSearchVisitor extends SymbolSearchVisitor {
   override def shouldVisitPackage(pkg: String): Boolean = true
   override def isCancelled(): Boolean = false
   override def visitClassfile(pkg: String, filename: String): Int = {
-    if (filename.contains('$')) {
+    // package-info.class is a special class that is used to store package metadata
+    if (filename.contains('$') || filename == "package-info.class") {
       // TODO: handle inner classes
       return 0
     }

@@ -138,7 +138,7 @@ class CompletionMemberSelectSuite extends BaseJavaCompletionSuite {
        |notify()
        |notifyAll()
        |wait()
-       |wait(long arg0)
+       |wait(long timeoutMillis)
        |wait(long timeoutMillis, int nanos)
        |finalize()
        |""".stripMargin,
@@ -232,4 +232,25 @@ class CompletionMemberSelectSuite extends BaseJavaCompletionSuite {
     filterItem = _.getLabel().startsWith("parent"),
   )
 
+  check(
+    "only-static-members-select",
+    """
+      |class TestStaticMethods {
+      |  public static String hello(){
+      |        return "hello";
+      |    }
+      |
+      |    public String nonStaticHello(){
+      |        return "nonStatic";
+      |    }
+      |
+      |    public static void main(String[] args) {
+      |        TestStaticMethods.@@
+      |    }
+      |}
+      |""".stripMargin,
+    """|hello()
+       |main(java.lang.String[] args)
+       |""".stripMargin,
+  )
 }
