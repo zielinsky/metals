@@ -4,6 +4,7 @@ import scala.meta.internal.metals.Embedded
 import scala.meta.internal.metals.JavaBinary
 import scala.meta.internal.metals.MetalsEnrichments._
 import scala.meta.internal.metals.UserConfiguration
+import scala.meta.internal.semver.SemVer
 import scala.meta.io.AbsolutePath
 
 import coursierapi.Dependency
