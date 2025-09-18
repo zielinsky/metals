@@ -1454,9 +1454,6 @@ class WorkspaceLspService(
           .asJavaObject
       case ServerCommands.CopyWorksheetOutput(path) =>
         getServiceFor(path).copyWorksheetOutput(path.toAbsolutePath)
-      case ServerCommands.MetalsPaste(params) =>
-        val path = params.originDocument.getUri().toAbsolutePath
-        getServiceFor(path).didPaste(params).asJavaObject
       case ServerCommands.ShowReportsForBuildTarget(target) =>
         Future {
           folderServices.iterator
@@ -1472,6 +1469,13 @@ class WorkspaceLspService(
               doctor.executeRunDoctor()
             }
         }.asJavaObject
+      case ServerCommands.MetalsPaste(params) =>
+        val path = params.originDocument.getUri().toAbsolutePath
+        getServiceFor(path).didPaste(params).asJavaObject
+      case ServerCommands.CopyFQNOfSymbol(params) =>
+        getServiceFor(params.getTextDocument.getUri())
+          .copyFQNOfSymbol(params)
+          .asJavaObject
       case actionCommand
           if currentOrHeadOrFallback.allActionCommandsIds(
             actionCommand.getCommand()
