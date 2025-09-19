@@ -50,7 +50,7 @@ object V {
   val qdox = "2.2.0"
   val protobuf = "4.32.1"
 
-  val guava = "com.google.guava" % "guava" % "33.4.8-jre"
+  val guava = "com.google.guava" % "guava" % "33.5.0-jre"
   val lsp4j = "org.eclipse.lsp4j" % "org.eclipse.lsp4j" % lsp4jV
   val dap4j = "org.eclipse.lsp4j" % "org.eclipse.lsp4j.debug" % lsp4jV
 
