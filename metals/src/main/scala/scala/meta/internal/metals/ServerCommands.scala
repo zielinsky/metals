@@ -907,6 +907,7 @@ case class DebugDiscoveryParams(
     @Nullable jvmOptions: java.util.List[String] = null,
     @Nullable env: java.util.Map[String, String] = null,
     @Nullable envFile: String = null,
+    @Nullable position: Position = null,
 )
 
 case class RunScalafixRulesParams(
