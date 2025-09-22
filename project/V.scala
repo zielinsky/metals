@@ -6,7 +6,7 @@ object V {
   val scala212 = "2.12.21"
   val scala213 = "2.13.18"
   val scala3 = "3.3.6"
-  val scala3ForSBT2 = "3.6.4"
+  val scala3ForSBT2 = "3.7.2"
   val latestScala3Next = "3.7.3"
 
   // When you can add to removedScalaVersions in MtagsResolver.scala with the last released version
@@ -49,6 +49,7 @@ object V {
     if (scalaVersion.startsWith("2.12")) "3.15.2" else scribe
   val qdox = "2.2.0"
   val protobuf = "4.32.1"
+  val sbt2Version = "2.0.0-RC4"
 
   val guava = "com.google.guava" % "guava" % "33.5.0-jre"
   val lsp4j = "org.eclipse.lsp4j" % "org.eclipse.lsp4j" % lsp4jV
