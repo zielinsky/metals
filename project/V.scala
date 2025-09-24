@@ -49,7 +49,7 @@ object V {
     if (scalaVersion.startsWith("2.12")) "3.15.2" else scribe
   val qdox = "2.2.0"
   val protobuf = "4.32.1"
-  val sbt2Version = "2.0.0-RC4"
+  val sbt2Version = "2.0.0-RC5"
 
   val guava = "com.google.guava" % "guava" % "33.5.0-jre"
   val lsp4j = "org.eclipse.lsp4j" % "org.eclipse.lsp4j" % lsp4jV
