@@ -95,12 +95,22 @@ class SignatureHelpDocSuite extends BaseSignatureHelpSuite {
   )
 
   checkDoc(
-    "curry2",
+    "curry",
     """
       |object a {
-      |  Option(1).fold("@@")
+      |  Option(1).fold("")(_ => @@)
       |}
     """.stripMargin,
+    foldSecondParam,
+    compat = Map(
+      "2.13.17" -> foldSecondParam.replace(
+        "option map f getOrElse ifEmpty",
+        "option.map(f).getOrElse(ifEmpty)"
+      )
+    )
+  )
+
+  val foldFirstParam: String =
     s"""|$foldLatestDocs
         |**Parameters**
         |- `ifEmpty`: the expression to evaluate if empty.
@@ -109,7 +119,15 @@ class SignatureHelpDocSuite extends BaseSignatureHelpSuite {
         |        ^^^^^^^^^^^^^
         |  @param ifEmpty String the expression to evaluate if empty.
         |  @param f the function to apply if nonempty.
-        |""".stripMargin,
+        |""".stripMargin
+  checkDoc(
+    "curry2",
+    """
+      |object a {
+      |  Option(1).fold("@@")
+      |}
+    """.stripMargin,
+    foldFirstParam,
     compat = Map(
       "2.13.17" ->
         s"""|$foldLatestDocs21318
