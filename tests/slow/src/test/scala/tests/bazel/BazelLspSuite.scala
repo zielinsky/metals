@@ -206,7 +206,7 @@ class BazelLspSuite
       _ = server.headServer.connectionProvider.buildServerPromise = Promise()
       _ = client.resetWorkspace =
         new MessageActionItem(Messages.ResetWorkspace.resetWorkspace)
-      _ <- server.executeCommand(ServerCommands.ResetWorkspace)
+      _ <- server.executeCommand(ServerCommands.ResetWorkspace, true)
       _ <- server.server.buildServerPromise.future
       resultAfter <- getTargetInfo(targets.head.bazelEscapedDisplayName)
       _ = assertNoDiff(resultAfter, expectedTarget)
@@ -214,8 +214,7 @@ class BazelLspSuite
       assertNoDiff(
         client.workspaceMessageRequests,
         List(
-          Messages.DeprecatedRemovedScalaVersion.message(Set("2.13.12")),
-          Messages.ResetWorkspace.message,
+          Messages.DeprecatedRemovedScalaVersion.message(Set("2.13.12"))
         ).mkString("\n"),
       )
       assert(bazelBspConfig.exists)

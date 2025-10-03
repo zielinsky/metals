@@ -23,6 +23,7 @@ import scala.meta.internal.builds.ScalaCliBuildTool
 import scala.meta.internal.builds.ShellRunner
 import scala.meta.internal.metals.MetalsEnrichments._
 import scala.meta.internal.metals.clients.language.ConfiguredLanguageClient
+import scala.meta.internal.metals.data.ResetWorkspaceState
 import scala.meta.internal.metals.doctor.HeadDoctor
 import scala.meta.internal.metals.doctor.MetalsServiceInfo
 import scala.meta.internal.metals.mbt.MbtBuildServer
@@ -679,36 +680,41 @@ class ProjectMetalsLspService(
 
   }
 
-  def resetWorkspace(): Future[Unit] = {
+  def resetWorkspace(): Future[ResetWorkspaceState] = {
     for {
       _ <- connect(Disconnect(true))
-      _ = clearBuildToolFolders()
+      resetWorkspaceState = clearBuildToolFolders()
       _ = tables.cleanAll()
       _ <- connectionProvider.fullConnect()
-    } yield ()
+    } yield resetWorkspaceState
   }
 
-  private def clearBuildToolFolders(): Unit = {
+  private def clearBuildToolFolders(): ResetWorkspaceState = {
     buildTools.dbBspPath match {
       case Some(dir) =>
         clearFolders(dir)
-        return
+        ResetWorkspaceState(false)
       case _ =>
+        val wasBloop = optProjectRoot match {
+          // NOTE(olafurpg): optProjectRoot is seemingly always None?
+          case Some(path) if buildTools.isBloop(path) =>
+            clearBloopDir(path)
+            true
+          case Some(path) if buildTools.isBazelBsp =>
+            clearFolders(
+              path.resolve(Directories.bazelBsp),
+              path.resolve(Directories.bsp),
+            )
+            false
+          case Some(path) if buildTools.isBsp =>
+            clearFolders(path.resolve(Directories.bsp))
+            false
+          case _ =>
+            false
+        }
+        ResetWorkspaceState(wasBloop)
     }
 
-    optProjectRoot match {
-      // NOTE(olafurpg): optProjectRoot is seemingly always None?
-      case Some(path) if buildTools.isBloop(path) =>
-        clearBloopDir(path)
-      case Some(path) if buildTools.isBazelBsp =>
-        clearFolders(
-          path.resolve(Directories.bazelBsp),
-          path.resolve(Directories.bsp),
-        )
-      case Some(path) if buildTools.isBsp =>
-        clearFolders(path.resolve(Directories.bsp))
-      case _ =>
-    }
   }
 
   val treeView =
