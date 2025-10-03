@@ -34,4 +34,12 @@ public interface InlayHintsParams extends RangeParams {
   default boolean hintsInPatternMatch() {
     return false;
   }
+
+  /**
+   * Response should contain decorations for closing labels.
+   */
+  default boolean closingLabels() {
+    return false;
+  }
+
 }
