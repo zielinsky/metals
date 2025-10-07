@@ -1920,14 +1920,34 @@ abstract class MetalsLspService(
   )
   buildClient.registerLogForwarder(debugProvider)
 
+  private def afterCompilationFinished[T](
+      params: DebugDiscoveryParams
+  )(action: DebugDiscoveryParams => Future[T]): Future[T] = {
+    val path = Option(params.path).map(_.toAbsolutePath)
+    val buildTarget = path
+      .flatMap(buildTargets.inverseSources(_))
+      .orElse {
+        Option(params.buildTarget)
+          .flatMap(buildTargets.findByDisplayName)
+          .map(_.getId())
+      }
+
+    buildTarget match {
+      case Some(target) =>
+        compilations
+          .compilationFinished(Seq(target), compileInverseDependencies = false)
+          .flatMap(_ => action(params))
+      case None =>
+        action(params)
+    }
+  }
+
   def debugDiscovery(params: DebugDiscoveryParams): Future[DebugSession] =
-    debugDiscovery
-      .debugDiscovery(params)
+    afterCompilationFinished(params)(debugDiscovery.debugDiscovery)
       .flatMap(debugProvider.asSession)
 
   def runClosest(params: DebugDiscoveryParams): Future[DebugSession] =
-    debugDiscovery
-      .debugDiscovery(params)
+    afterCompilationFinished(params)(debugDiscovery.debugDiscovery)
       .flatMap(debugProvider.asSession)
 
   def createDebugSession(
@@ -1960,7 +1980,9 @@ abstract class MetalsLspService(
   def discoverMainClasses(
       unresolvedParams: DebugDiscoveryParams
   ): Future[b.DebugSessionParams] =
-    debugDiscovery.runCommandDiscovery(unresolvedParams)
+    afterCompilationFinished(unresolvedParams)(
+      debugDiscovery.runCommandDiscovery
+    )
 
   def supportsBuildTarget(
       target: b.BuildTargetIdentifier
