@@ -464,7 +464,7 @@ class BazelLspSuite
            |derive_targets_from_directories: false
            |
            |enabled_rules:
-           |    scala_rules
+           |    rules_scala
            |    rules_java
            |    rules_jvm
            |
