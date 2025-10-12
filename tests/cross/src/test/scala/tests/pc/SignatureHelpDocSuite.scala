@@ -106,7 +106,8 @@ class SignatureHelpDocSuite extends BaseSignatureHelpSuite {
       "2.13.17" -> foldSecondParam.replace(
         "option map f getOrElse ifEmpty",
         "option.map(f).getOrElse(ifEmpty)"
-      )
+      ),
+      "2.13.18" -> post21317FoldSecondParam
     )
   )
 
@@ -120,6 +121,11 @@ class SignatureHelpDocSuite extends BaseSignatureHelpSuite {
         |  @param ifEmpty String the expression to evaluate if empty.
         |  @param f the function to apply if nonempty.
         |""".stripMargin
+  val post21317FoldFirstParam: String =
+    foldFirstParam.replace(
+      "option map f getOrElse ifEmpty",
+      "option.map(f).getOrElse(ifEmpty)"
+    )
   checkDoc(
     "curry2",
     """
