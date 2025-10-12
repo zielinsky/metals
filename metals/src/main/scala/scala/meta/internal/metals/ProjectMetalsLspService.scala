@@ -682,10 +682,9 @@ class ProjectMetalsLspService(
 
   def resetWorkspace(): Future[ResetWorkspaceState] = {
     for {
-      _ <- connect(Disconnect(true))
+      _ <- compilations.clean(recompile = false)
       resetWorkspaceState = clearBuildToolFolders()
       _ = tables.cleanAll()
-      _ <- connectionProvider.fullConnect()
     } yield resetWorkspaceState
   }
 
@@ -698,7 +697,6 @@ class ProjectMetalsLspService(
         val wasBloop = optProjectRoot match {
           // NOTE(olafurpg): optProjectRoot is seemingly always None?
           case Some(path) if buildTools.isBloop(path) =>
-            clearBloopDir(path)
             true
           case Some(path) if buildTools.isBazelBsp =>
             clearFolders(

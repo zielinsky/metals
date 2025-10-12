@@ -1708,7 +1708,7 @@ abstract class MetalsLspService(
   def cascadeCompile(): Future[Unit] =
     compilations.cascadeCompileFiles(buffers.open.toSeq)
 
-  def cleanCompile(): Future[Unit] = compilations.recompileAll()
+  def cleanCompile(): Future[Unit] = compilations.clean(recompile = true)
 
   def compileTarget(target: b.BuildTargetIdentifier): Future[b.CompileResult] =
     compilations.compileTarget(target)
@@ -2211,15 +2211,6 @@ abstract class MetalsLspService(
         userConfig.definitionIndexStrategy.isClasspath,
       mtags = () => mtags,
     )
-  }
-
-  protected def clearBloopDir(folder: AbsolutePath): Unit = {
-    try BloopDir.clear(folder)
-    catch {
-      case e: Throwable =>
-        languageClient.showMessage(Messages.ResetWorkspaceFailed)
-        scribe.error("Error while deleting directories inside .bloop", e)
-    }
   }
 
   protected def clearFolders(folders: AbsolutePath*): Unit = {
