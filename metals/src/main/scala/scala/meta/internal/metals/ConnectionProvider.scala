@@ -771,13 +771,23 @@ class ConnectionProvider(
             "Connected to build server",
             true,
           ) {
-            bspConnector.connect(
-              buildToolProvider.buildTool,
-              folder,
-              () => userConfig,
-              shellRunner,
-              progress,
-            )
+            // If chosen build tool was removed at any point we want to readd it
+            val buildToolOpt: Future[Option[BuildTool]] =
+              buildToolProvider.buildTool match {
+                case Some(value) =>
+                  Future.successful(Some(value))
+                case None =>
+                  buildToolProvider.supportedBuildTool().map(_.map(_.buildTool))
+              }
+            buildToolOpt.flatMap { toolOpt =>
+              bspConnector.connect(
+                buildToolProvider.buildTool,
+                folder,
+                () => userConfig,
+                shellRunner,
+                progress,
+              )
+            }
           }
           .withInterrupt
         result <- maybeSession match {
