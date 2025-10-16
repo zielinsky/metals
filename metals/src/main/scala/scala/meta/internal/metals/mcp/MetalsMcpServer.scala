@@ -1091,7 +1091,7 @@ class MetalsMcpServer(
       """{
         |  "type": "object",
         |  "properties": { }
-        |} 
+        |}
         |""".stripMargin
     new AsyncToolSpecification(
       new Tool(
