@@ -29,7 +29,11 @@ import scala.meta.pc.SymbolSearch
 import scala.meta.pc.VirtualFileParams
 
 import com.sun.source.tree.CompilationUnitTree
+import com.sun.source.tree.MethodTree
+import com.sun.source.tree.Tree
+import com.sun.source.tree.VariableTree
 import com.sun.source.util.JavacTask
+import com.sun.source.util.SourcePositions
 import com.sun.source.util.TreePath
 import com.sun.source.util.Trees
 import org.slf4j.Logger
@@ -187,6 +191,45 @@ class JavaMetalsCompiler(
     }
   }
 
+  /**
+   * Return the real start and end for the name. For definitions the start and end include the whole element.
+   *
+   * @param text
+   * @param elementName
+   * @param originalStart
+   * @param originalEnd
+   */
+  def findIndentifierStartAndEnd(
+      text: String,
+      elementName: String,
+      originalStart: Int,
+      originalEnd: Int,
+      leaf: Tree,
+      root: CompilationUnitTree,
+      sourcePositions: SourcePositions
+  ): (Int, Int) =
+    if (originalEnd - originalStart == elementName.length()) {
+      (originalStart, originalEnd)
+    } else {
+      val declarationStart = leaf match {
+        case mt: MethodTree if mt.getReturnType() != null =>
+          sourcePositions.getEndPosition(root, mt.getReturnType())
+        case vt: VariableTree =>
+          sourcePositions.getEndPosition(root, vt.getType())
+        case _ =>
+          originalStart
+      }
+
+      val subText = text.substring(declarationStart.toInt, originalEnd)
+      val nameIndex = subText.indexOf(elementName)
+      if (nameIndex >= 0) {
+        val nameStart = declarationStart + nameIndex
+        val nameEnd = nameStart + elementName.length()
+        (nameStart.toInt, nameEnd.toInt)
+      } else {
+        (originalStart, originalEnd)
+      }
+    }
   // NOTE: this function probably needs a reimplementation. It may not handle
   // tricker cases like implementing a supermethod from a grandparent class.
   private def overriddenSymbols(

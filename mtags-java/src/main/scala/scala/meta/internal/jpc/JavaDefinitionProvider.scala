@@ -15,6 +15,7 @@ import scala.meta.internal.pc.DefinitionResultImpl
 import scala.meta.pc.DefinitionResult
 import scala.meta.pc.OffsetParams
 
+import com.sun.source.tree.Tree
 import com.sun.source.util.SourcePositions
 import com.sun.source.util.TreePath
 import com.sun.source.util.Trees
@@ -54,7 +55,9 @@ class JavaDefinitionProvider(
     val result: Option[DefinitionResult] = for {
       (compile, node) <- compiler.nodeAtPosition(params)
       trees = Trees.instance(compile.task)
-      element <- processor.transformElement(trees.getElement(node))
+      element <- processor
+        .transformElement(trees.getElement(node))
+        .orElse(Option(trees.getElement(node)))
     } yield {
       val sourcePositions = trees.getSourcePositions()
       val source = definitionSource(node, trees, element)
@@ -63,7 +66,14 @@ class JavaDefinitionProvider(
           val locations = for {
             p <- all.iterator
             pElement <- processor.transformElement(trees.getElement(p)).toList
-            defn <- sourceDefinition(compile, sourcePositions, pElement, p)
+            defn <- sourceDefinition(
+              compile,
+              sourcePositions,
+              pElement,
+              p,
+              node,
+              trees
+            )
               .locations()
               .asScala
           } yield defn
@@ -85,7 +95,8 @@ class JavaDefinitionProvider(
       }
     }
 
-    result.getOrElse(DefinitionResultImpl.empty)
+    result
+      .getOrElse(DefinitionResultImpl.empty)
   }
 
   private def definitionSource(
@@ -130,11 +141,71 @@ class JavaDefinitionProvider(
     Classpath(List(element))
   }
 
+  def localDefinition(
+      element: Element,
+      elementTree: Tree,
+      n: TreePath,
+      sourcePositions: SourcePositions,
+      trees: Trees
+  ): List[l.Location] = {
+    val initialStartPos = sourcePositions.getStartPosition(
+      n.getCompilationUnit(),
+      elementTree
+    )
+    val initialEndPos =
+      sourcePositions.getEndPosition(
+        n.getCompilationUnit(),
+        elementTree
+      )
+    // For things like default contructors
+    val (startPos, endPos, targetElement) =
+      if (initialStartPos < 0 || initialEndPos < 0) {
+        val enclosing = element.getEnclosingElement()
+        val enclosingTree = trees.getTree(enclosing)
+        val enclosingStartPos = sourcePositions.getStartPosition(
+          n.getCompilationUnit(),
+          enclosingTree
+        )
+        val enclosingEndPos = sourcePositions.getEndPosition(
+          n.getCompilationUnit(),
+          enclosingTree
+        )
+        (enclosingStartPos, enclosingEndPos, enclosing)
+      } else {
+        (initialStartPos, initialEndPos, element)
+      }
+
+    if (startPos >= 0 && endPos >= 0) {
+      val elementName = targetElement.getSimpleName().toString()
+      val (start, end) = compiler.findIndentifierStartAndEnd(
+        params.text(),
+        elementName,
+        startPos.toInt,
+        endPos.toInt,
+        elementTree,
+        n.getCompilationUnit(),
+        sourcePositions
+      )
+      val range = new l.Range(
+        offsetToPosition(start, params.text()),
+        offsetToPosition(
+          end,
+          params.text()
+        )
+      )
+      List(new l.Location(params.uri().toString(), range))
+    } else {
+      Nil
+    }
+  }
+
   private def sourceDefinition(
       compile: JavaSourceCompile,
       sourcePositions: SourcePositions,
       element: Element,
-      path: TreePath
+      path: TreePath,
+      n: TreePath,
+      trees: Trees
   ): DefinitionResult = {
     val cu = path.getCompilationUnit()
     val start = sourcePositions.getStartPosition(cu, path.getLeaf())
@@ -160,8 +231,18 @@ class JavaDefinitionProvider(
           .getRole() == Semanticdb.SymbolOccurrence.Role.DEFINITION
       )
     definitionOccurrence match {
-      case None =>
-        DefinitionResultImpl.empty
+      case None => {
+        val elementTree = trees.getTree(element)
+        val sourceFile = n.getCompilationUnit().getSourceFile()
+        val locations =
+          if (elementTree != null && sourceFile.toUri() == params.uri()) {
+            localDefinition(element, elementTree, n, sourcePositions, trees)
+          } else {
+            // Element is not in current file
+            Nil
+          }
+        DefinitionResultImpl(semanticdbSymbol, locations.asJava)
+      }
       case Some(occ) =>
         val uri = compiler.guessOriginalUri(cu.getSourceFile())
         DefinitionResultImpl(
@@ -171,6 +252,22 @@ class JavaDefinitionProvider(
           ).asJava
         )
     }
+  }
+
+  private def offsetToPosition(offset: Int, text: String): l.Position = {
+    var line = 0
+    var character = 0
+    var i = 0
+    while (i < offset && i < text.length()) {
+      if (text.charAt(i) == '\n') {
+        line += 1
+        character = 0
+      } else {
+        character += 1
+      }
+      i += 1
+    }
+    new l.Position(line, character)
   }
 
 }
