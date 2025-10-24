@@ -11,6 +11,5 @@ public interface AutoImportsResult {
 
   public default Optional<String> symbol() {
     return Optional.empty();
-  }
-  ;
+  };
 }

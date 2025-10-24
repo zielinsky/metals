@@ -102,40 +102,7 @@ class MetalsPasteProvider(
           .sequence(imports)
           .map { edits =>
             val flattened = edits.flatten.distinct
-
-            // Fix import positions that are placed before existing imports
-            // Only adjust edits at position 0 (start of line) to avoid grouping edits that should be separate
-            val fileLines = params.text.linesIterator.toArray
-            val adjustedEdits = flattened.map { edit =>
-              val pos = edit.getRange().getStart()
-              val line = pos.getLine()
-              val char = pos.getCharacter()
-
-              // Only adjust if at start of line (char 0) and that line contains an import
-              if (
-                char == 0 && line < fileLines.length && fileLines(line).trim
-                  .startsWith("import ")
-              ) {
-                // Find the last consecutive import line starting from this position
-                var lastImportLine = line
-                while (
-                  lastImportLine + 1 < fileLines.length &&
-                  fileLines(lastImportLine + 1).trim.startsWith("import ")
-                ) {
-                  lastImportLine += 1
-                }
-
-                // Place our edit after the last import line, stripping leading newline
-                val newPos = new lsp4j.Position(lastImportLine + 1, 0)
-                val adjustedText = edit.getNewText().stripPrefix("\n")
-                new TextEdit(new lsp4j.Range(newPos, newPos), adjustedText)
-              } else {
-                edit
-              }
-            }
-
-            // Group by adjusted position and merge
-            adjustedEdits
+            flattened
               .groupBy(edit =>
                 (edit.getRange().getStart(), edit.getRange().getEnd())
               )

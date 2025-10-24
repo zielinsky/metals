@@ -1683,7 +1683,21 @@ abstract class MetalsLspService(
   ): Future[ApplyWorkspaceEditResponse] = {
     metalsPasteProvider
       .didPaste(params, EmptyCancelToken)
-      .flatMap(optEdit => applyEdits(params.textDocument.getUri(), optEdit))
+      .flatMap { optEdit =>
+        val didPasteEdits = rangeFormattingProvider.format(
+          new DocumentRangeFormattingParams(
+            params.textDocument,
+            new FormattingOptions(),
+            params.range,
+          ),
+          folder,
+          EmptyCancelToken,
+        )
+        applyEdits(
+          params.textDocument.getUri(),
+          optEdit ++ didPasteEdits,
+        )
+      }
   }
 
   protected def applyEdits(
