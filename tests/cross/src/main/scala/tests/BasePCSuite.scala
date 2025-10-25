@@ -219,15 +219,6 @@ abstract class BasePCSuite extends BaseSuite with PCSuite {
       filename: String = "test.scala"
   ): (String, Int, Int) = super.hoverParams(code, filename)
 
-  def doc(e: JEither[String, MarkupContent]): String = {
-    if (e == null) ""
-    else if (e.isLeft) {
-      " " + e.getLeft
-    } else {
-      " " + e.getRight.getValue
-    }
-  }.trim
-
   def sortLines(stableOrder: Boolean, string: String): String = {
     if (stableOrder) string
     else string.linesIterator.toList.sorted.mkString("\n")
