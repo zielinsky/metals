@@ -1187,7 +1187,6 @@ abstract class MetalsLspService(
         val fingerprint = fingerprints.add(path, FileIO.slurp(path, charset))
         (path, fingerprint)
       }
-
     Future
       .sequence(
         List(
