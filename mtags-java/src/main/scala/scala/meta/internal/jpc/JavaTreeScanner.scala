@@ -137,6 +137,11 @@ class JavaTreeScanner(
     visitNode(node, p, super.visitClass)
   }
 
+  override def visitMethod(node: MethodTree, p: CursorPosition): TreePath = {
+
+    visitNode(node, p, super.visitMethod)
+  }
+
   override def visitNewClass(
       node: NewClassTree,
       p: CursorPosition
@@ -147,7 +152,7 @@ class JavaTreeScanner(
 
     if (start <= p.start && p.end <= end) {
       lastVisitedParentTrees = getCurrentPath :: lastVisitedParentTrees
-      getCurrentPath
+      super.visitNewClass(node, p)
     } else {
       super.visitNewClass(node, p)
       visitNode(node, p, super.visitNewClass)
