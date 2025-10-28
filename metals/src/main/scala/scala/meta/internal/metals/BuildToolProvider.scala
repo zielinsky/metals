@@ -18,11 +18,12 @@ class BuildToolProvider(
     warnings: ProjectWarnings,
     languageClient: MetalsLanguageClient,
     preferredBuildServer: Future[Option[String]],
+    userConfig: () => UserConfiguration,
 )(implicit ec: ExecutionContext) {
   private val buildToolSelector: BuildToolSelector = new BuildToolSelector(
     languageClient,
     tables,
-    preferredBuildServer,
+    userConfig,
   )
 
   def buildTool: Option[BuildTool] =

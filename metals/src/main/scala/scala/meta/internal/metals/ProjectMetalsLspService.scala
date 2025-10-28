@@ -186,6 +186,7 @@ class ProjectMetalsLspService(
     warnings,
     languageClient,
     userConfigPromise.future.map(_ => userConfig.preferredBuildServer),
+    () => userConfig,
   )
 
   protected val bloopServers: BloopServers = new BloopServers(

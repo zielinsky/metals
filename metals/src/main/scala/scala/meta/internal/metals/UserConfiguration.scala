@@ -85,6 +85,7 @@ case class UserConfiguration(
     customProjectRoot: Option[String] = None,
     verboseCompilation: Boolean = false,
     automaticImportBuild: AutoImportBuildKind = AutoImportBuildKind.Off,
+    targetBuildTool: Option[String] = None,
     scalaCliLauncher: Option[String] = None,
     scalaCliEnabled: Boolean = false,
     defaultBspToBuildTool: Boolean = false,
@@ -739,6 +740,16 @@ object UserConfiguration {
            |build imports after subsequent changes as well.""".stripMargin,
       ),
       UserConfigurationOption(
+        "target-build-tool",
+        """empty string `""`.""",
+        """"bazel"""",
+        "Preferred build tool when multiple are detected",
+        """|The preferred build tool to use when multiple build definitions are detected in the workspace.
+           |This prevents the build tool selection dialog from appearing on startup.
+           |Valid values are: "sbt", "gradle", "mvn", "mill", "scala-cli", "bazel".
+           |""".stripMargin,
+      ),
+      UserConfigurationOption(
         "default-bsp-to-build-tool",
         "false",
         "true",
@@ -1237,6 +1248,18 @@ object UserConfiguration {
         case _ => AutoImportBuildKind.Off
       }
 
+    val targetBuildTool = {
+      import scala.meta.internal.builds._
+      getStringKey("target-build-tool").flatMap { tool =>
+        if (BuildTools.allBuildToolNames.contains(tool)) {
+          Some(tool)
+        } else {
+          errors += s"Invalid target-build-tool '$tool'. Valid values are: ${BuildTools.allBuildToolNames.toSeq.sorted.mkString(", ")}"
+          None
+        }
+      }
+    }
+
     val scalaCliLauncher = getStringKey("scala-cli-launcher")
     val scalaCliEnabled = getBooleanKey("scala-cli-enabled").getOrElse(false)
     val defaultBspToBuildTool =
@@ -1418,6 +1441,7 @@ object UserConfiguration {
           customProjectRoot,
           verboseCompilation,
           autoImportBuilds,
+          targetBuildTool,
           scalaCliLauncher,
           scalaCliEnabled,
           defaultBspToBuildTool,
