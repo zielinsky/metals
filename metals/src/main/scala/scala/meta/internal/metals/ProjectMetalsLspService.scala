@@ -117,7 +117,14 @@ class ProjectMetalsLspService(
       config.userMessage,
       progress => connectionProvider.Connect.connect(config, progress),
       metricName = config.metricName,
-    )
+    
+
+  def isOnlyScalaCli: Boolean = {
+    buildTools.loadSupported() match {
+      case (_: ScalaCliBuildTool) :: Nil => true
+      case _ => false
+    }
+  }
 
   override val fileWatcher: FileWatcher =
     if (Testing.isEnabled && !Testing.isFileWatchingDisabled)
@@ -534,6 +541,9 @@ class ProjectMetalsLspService(
           case FileOutOfScalaCliBspScope.regenerateAndRestart =>
             val buildTool = ScalaCliBuildTool(folder, folder, () => userConfig)
             connect(GenerateBspConfigAndConnect(buildTool)).ignoreValue
+          case FileOutOfScalaCliBspScope.openDoctor =>
+            headDoctor.executeRunDoctor()
+            Future.successful(())
           case _ => Future.successful(())
         }
     } else Future.successful(())
