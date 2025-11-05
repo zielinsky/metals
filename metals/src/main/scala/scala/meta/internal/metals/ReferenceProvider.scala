@@ -62,7 +62,7 @@ final class ReferenceProvider(
   ): Future[Unit] = Future {
     buildTargets.inverseSources(path).map { id =>
       val dialect = scalaVersionSelector.getDialect(path)
-      val set = identifierIndex.collectIdentifiers(text, dialect)
+      val set = identifierIndex.collectIdentifiers(text, dialect, path)
       identifierIndex.addIdentifiers(path, id, set)
       index.updateWith(path.toNIO) {
         case Some(entry) if !entry.isStale => Some(entry.asStale)
@@ -175,7 +175,7 @@ final class ReferenceProvider(
   )(implicit report: ReportContext): Future[List[ReferencesResult]] = {
     val source = params.getTextDocument.getUri.toAbsolutePath
     val textDoc = semanticdbs().textDocument(source)
-    val supportsPcRefs =
+    val supportsPcRefs = source.isJava ||
       buildTargets.inverseSources(source).exists(buildTargets.supportsPcRefs(_))
     val textDocOpt =
       if (supportsPcRefs) textDoc.toOption else textDoc.documentIncludingStale
@@ -388,7 +388,6 @@ final class ReferenceProvider(
         visited ++= searchFiles
         (id -> searchFiles)
       }
-
     val lazyResults = pathsWithId
       .groupMap(_._1)(_._2)
       .map { case (id, searchFiles) =>
