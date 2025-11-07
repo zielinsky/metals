@@ -7,8 +7,8 @@ import Tests._
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
 // For testing nightlies
-Global / resolvers += "scala-integration" at
-  "https://scala-ci.typesafe.com/artifactory/scala-integration/"
+Global / resolvers += "scala-nightlies" at
+  "https://repo.scala-lang.org/artifactory/maven-nightlies"
 
 // The OSS version of Metals that this Databricks-internal fork is based on.
 // Make sure to bump up this version when we merge with upstream.
