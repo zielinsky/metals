@@ -1,7 +1,6 @@
 package scala.meta.internal.metals
 
 import java.io.File
-import java.net.MalformedURLException
 import java.net.URLClassLoader
 import java.nio.file.FileSystemException
 import java.nio.file.Files
@@ -17,7 +16,6 @@ import scala.util.Properties
 import scala.util.control.NonFatal
 
 import scala.meta.internal.builds.ShellRunner
-import scala.meta.internal.metals.MetalsEnrichments._
 import scala.meta.internal.pc.ScalaPresentationCompiler
 import scala.meta.internal.worksheets.MdocClassLoader
 import scala.meta.io.AbsolutePath
@@ -25,15 +23,20 @@ import scala.meta.io.Classpath
 import scala.meta.pc.EmbeddedClient
 import scala.meta.pc.PresentationCompiler
 
-import coursier.cache.CacheDefaults
-import coursier.cache.CacheUrl
-import coursier.ivy
-import coursierapi.Dependency
-import coursierapi.Fetch
-import coursierapi.IvyRepository
-import coursierapi.MavenRepository
-import coursierapi.Repository
-import coursierapi.ResolutionParams
+import coursier.Classifier
+import coursier.Dependency
+import coursier.Fetch
+import coursier.MavenRepository
+import coursier.ModuleName
+import coursier.Organization
+import coursier.Repository
+import coursier.Resolve
+import coursier.VersionConstraint
+import coursier.cache.FileCache
+import coursier.core.Authentication
+import coursier.ivy.IvyRepository
+import coursier.params.ResolutionParams
+import coursier.util.Task
 import mdoc.interfaces.Mdoc
 
 /**
@@ -160,13 +163,12 @@ final class Embedded(
       scalaBinaryVersion: String,
       scalaVersion: Option[String],
   ): URLClassLoader = {
-    val resolutionParams = ResolutionParams
-      .create()
-
     /* note(@tgodzik) we add an exclusion so that the mdoc classlaoder does not try to
      * load coursierapi.Logger and instead will use the already loaded one
      */
-    resolutionParams.addExclusion("io.get-coursier", "interface")
+    val resolutionParams = ResolutionParams().withExclusions(
+      Set((Organization("io.get-coursier"), ModuleName("interface")))
+    )
 
     /**
      * For scala 3 the code is backwards compatible, but mdoc itself depends on
@@ -181,8 +183,8 @@ final class Embedded(
     val fullResolution = scalaVersion match {
       case None => resolutionParams
       case Some(version) =>
-        resolutionParams.forceVersions(
-          Embedded.scala3CompilerDependencies(version).asJava
+        resolutionParams.withForceVersion0(
+          Embedded.scala3CompilerDependencies(version)
         )
     }
     val jars =
@@ -228,7 +230,6 @@ final class Embedded(
 
 object Embedded {
   private val jdkVersion = JdkVersion.parse(Properties.javaVersion)
-  private def credentials = CacheDefaults.credentials
 
   private lazy val mavenLocal = {
     val str = new File(sys.props("user.home")).toURI.toString
@@ -237,110 +238,63 @@ object Embedded {
         str
       else
         str + "/"
-    MavenRepository.of(homeUri + ".m2/repository")
+    MavenRepository(homeUri + ".m2/repository")
   }
 
   lazy val repositories: List[Repository] =
-    (Repository.defaults().asScala.toList ++
+    (Resolve.defaultRepositories ++
       List(
         mavenLocal,
-        MavenRepository.of(
+        MavenRepository(
           "https://central.sonatype.com/repository/maven-snapshots/"
         ),
-      ))
-      .distinctBy {
-        case m: MavenRepository => m.getBase().stripSuffix("/")
-        case i: IvyRepository => i.getPattern()
-      }
-      .map(setCredentials)
+      )).distinctBy {
+      case m: MavenRepository => m.root
+      case i: IvyRepository => i.pattern
+    }.toList
+
+  lazy val apiRepositories: List[coursierapi.Repository] =
+    repositories.collect {
+      case mvn: MavenRepository =>
+        val credentialsOpt = mvn.authentication.map(credentials)
+        coursierapi.MavenRepository
+          .of(mvn.root)
+          .withCredentials(credentialsOpt.orNull)
+      case ivy: IvyRepository =>
+        val credentialsOpt = ivy.authentication.map(credentials)
+        val mdPatternOpt = ivy.metadataPatternOpt.map(_.string)
+        coursierapi.IvyRepository
+          .of(ivy.pattern.string)
+          .withMetadataPattern(mdPatternOpt.orNull)
+          .withCredentials(credentialsOpt.orNull)
+    }
+
+  private def credentials(auth: Authentication): coursierapi.Credentials =
+    coursierapi.Credentials.of(auth.user, auth.passwordOpt.getOrElse(""))
 
   private[Embedded] def scala3CompilerDependencies(version: String) = List(
-    Dependency.of("org.scala-lang", "scala3-library_3", version),
-    Dependency.of("org.scala-lang", "scala3-compiler_3", version),
-    Dependency.of("org.scala-lang", "tasty-core_3", version),
-  ).map(d => (d.getModule, d.getVersion)).toMap
-
-  private def validateURL(url0: String) = {
-    try Some(CacheUrl.url(url0))
-    catch {
-      case e: MalformedURLException =>
-        val urlErrorMsg =
-          "Error parsing URL " + url0 + Option(e.getMessage).fold("")(
-            " (" + _ + ")"
-          )
-        if (url0.contains(File.separatorChar)) {
-          val f = new File(url0)
-          if (f.exists() && !f.isDirectory) {
-            scribe.warn(s"$urlErrorMsg, and $url0 not a directory")
-            None
-          } else
-            Some(f.toURI.toURL)
-        } else {
-          scribe.warn(urlErrorMsg)
-          None
-        }
-    }
-  }
-
-  private def urlFromRepo(repo: Repository): Option[String] = repo match {
-    case m: MavenRepository =>
-      Some(m.getBase())
-    case i: IvyRepository =>
-      ivy.IvyRepository.parse(i.getPattern()).toOption.map(_.pattern).map {
-        pat =>
-          pat.chunks
-            .takeWhile {
-              case _: coursier.ivy.Pattern.Chunk.Const => true
-              case _ => false
-            }
-            .map(_.string)
-            .mkString
-      }
-    case _ =>
-      None
-  }
-
-  def setCredentials(repo: Repository): Repository = try {
-    val url = urlFromRepo(repo)
-    val validatedUrl = url.flatMap(validateURL)
-
-    validatedUrl
-      .map { url =>
-        val creds =
-          credentials
-            .flatMap(_.get())
-            .find(_.autoMatches(url.toExternalForm(), realm0 = None))
-            .flatMap { cred =>
-              cred.usernameOpt.zip(cred.passwordOpt)
-            }
-
-        def newCredentials(user: String, pass: String) = {
-          scribe.info(
-            s"Setting credentials $user:${"*" * pass.length} for $url"
-          )
-          coursierapi.Credentials.of(user, pass)
-        }
-        (creds, repo) match {
-          case (Some((user, pass)), mvn: MavenRepository) =>
-            mvn.withCredentials(newCredentials(user, pass.value))
-          case (Some((user, pass)), ivy: IvyRepository) =>
-            ivy.withCredentials(newCredentials(user, pass.value))
-          case _ => repo
-        }
-      }
-      .getOrElse(repo)
-  } catch {
-    case NonFatal(e) =>
-      scribe.error(s"Error setting credentials for $repo", e)
-      repo
-  }
+    dependencyOf(
+      "org.scala-lang",
+      "scala3-library_3",
+      version,
+    ),
+    dependencyOf(
+      "org.scala-lang",
+      "scala3-compiler_3",
+      version,
+    ),
+    dependencyOf(
+      "org.scala-lang",
+      "tasty-core_3",
+      version,
+    ),
+  ).map(d => (d.module, d.versionConstraint)).toMap
 
   def fetchSettings(
       dep: Dependency,
       scalaVersion: Option[String],
       resolution: Option[ResolutionParams] = None,
-      customRepositories: List[String] = Nil,
-  ): Fetch = {
+  ): Fetch[Task] = {
 
     val mtagsInterfaceOverride = Map(
       "3.5.0" -> "1.3.1",
@@ -350,64 +304,65 @@ object Embedded {
       "3.4.0" -> "1.2.0",
     )
 
-    val resolutionParams = resolution.getOrElse(ResolutionParams.create())
+    val resolutionParams = resolution.getOrElse(ResolutionParams())
 
-    scalaVersion.foreach { scalaVersion =>
-      if (!ScalaVersions.isScala3Version(scalaVersion))
-        resolutionParams.forceVersions(
-          List(
-            scalaLibraryDependency(scalaVersion),
-            Dependency.of("org.scala-lang", "scala-compiler", scalaVersion),
-            Dependency.of("org.scala-lang", "scala-reflect", scalaVersion),
-          ).map(d => (d.getModule, d.getVersion)).toMap.asJava
-        )
-      else {
-        val mtagsOverride =
-          mtagsInterfaceOverride
-            .get(scalaVersion)
-            .map { overrideVersion =>
+    val resolutionWithOverride = scalaVersion
+      .flatMap { scalaVersion =>
+        val resolution =
+          if (!ScalaVersions.isScala3Version(scalaVersion))
+            resolutionParams.withForceVersion0(
               List(
-                Dependency
-                  .of("org.scalameta", "mtags-interfaces", overrideVersion)
-              ).map(d => (d.getModule, d.getVersion)).toMap
-            }
-            .getOrElse(Map.empty)
-
-        resolutionParams.forceVersions(
-          (scala3CompilerDependencies(scalaVersion) ++ mtagsOverride).asJava
-        )
+                scalaLibraryDependency(scalaVersion),
+                dependencyOf(
+                  "org.scala-lang",
+                  "scala-compiler",
+                  scalaVersion,
+                ),
+                dependencyOf(
+                  "org.scala-lang",
+                  "scala-reflect",
+                  scalaVersion,
+                ),
+              ).map(d => (d.module, d.versionConstraint)).toMap
+            )
+          else
+            resolutionParams.withForceVersion0(
+              scala3CompilerDependencies(scalaVersion)
+            )
+        mtagsInterfaceOverride.get(scalaVersion).map { overrideVersion =>
+          resolution.withForceVersion0(
+            Map(
+              coursier.Module(
+                Organization("org.scalameta"),
+                ModuleName("mtags-interfaces"),
+              ) -> VersionConstraint(overrideVersion)
+            )
+          )
+        }
       }
-    }
-    val repositories =
-      CoursierHelpers.parseCustomRepositories(customRepositories)
-
-    val fetch = Fetch.create()
-    // Prioritize our custom repositories since they may have attached credentials.
-    // The repos Coursier picks up via `COURSIER_REPOSITORIES` don't have credentials.
-    // By placing our custom repos first, the credentials get picked up.
-    val finalRepositories = repositories ++ fetch.getRepositories.asScala
-    fetch
-      // Important: not `addRepositories`
-      .withRepositories(finalRepositories: _*)
-      .withDependencies(dep)
-      .withResolutionParams(resolutionParams)
+      .getOrElse(resolutionParams)
+    val fileCache = FileCache()
+    Fetch(fileCache)
+      .addRepositories(repositories: _*)
+      .withDependencies(Seq(dep))
+      .withResolutionParams(resolutionWithOverride)
       .withMainArtifacts()
   }
 
   private def scalaLibraryDependency(scalaVersion: String): Dependency =
-    Dependency.of("org.scala-lang", "scala-library", scalaVersion)
+    dependencyOf("org.scala-lang", "scala-library", scalaVersion)
 
   private def scala3Dependency(scalaVersion: String): Dependency = {
     val binaryVersion =
       ScalaVersions.scalaBinaryVersionFromFullVersion(scalaVersion)
     if (binaryVersion.startsWith("3")) {
-      Dependency.of(
+      dependencyOf(
         "org.scala-lang",
         s"scala3-library_$binaryVersion",
         scalaVersion,
       )
     } else {
-      Dependency.of(
+      dependencyOf(
         "ch.epfl.lamp",
         s"dotty-library_$binaryVersion",
         scalaVersion,
@@ -415,10 +370,20 @@ object Embedded {
     }
   }
 
+  def dependencyOf(
+      organization: String,
+      module: String,
+      version: String,
+  ): Dependency =
+    Dependency(
+      coursier.Module(Organization(organization), ModuleName(module)),
+      version,
+    )
+
   private def scala3PresentationCompilerDependency(
       scalaVersion: String
   ): Dependency =
-    Dependency.of(
+    dependencyOf(
       "org.scala-lang",
       s"scala3-presentation-compiler_3",
       scalaVersion,
@@ -427,7 +392,7 @@ object Embedded {
   private def mtagsDependency(
       scalaVersion: String,
       metalsVersion: String,
-  ): (Dependency, String) = {
+  ): Dependency = {
     val mtagsScalaVersion =
       // Mtags was historically cross-built against the full Scala version
       // (example: 2.13.20), but is now cross-built against the binary version
@@ -435,18 +400,18 @@ object Embedded {
       if (scalaVersion.startsWith("2.12")) BuildInfo.scala212
       else if (scalaVersion.startsWith("2.13")) BuildInfo.scala213
       else scalaVersion
-    Dependency.of(
+    dependencyOf(
       "org.scalameta",
       s"mtags_$mtagsScalaVersion",
       metalsVersion,
-    ) -> mtagsScalaVersion
+    )
   }
 
   private def mdocDependency(
       scalaBinaryVersion: String,
       scalaVersion: Option[String],
   ): Dependency = {
-    Dependency.of(
+    dependencyOf(
       "org.scalameta",
       s"mdoc_${scalaBinaryVersion}",
       if (scalaBinaryVersion == "2.11") "2.2.24"
@@ -464,12 +429,20 @@ object Embedded {
   }
 
   private def semanticdbScalacDependency(scalaVersion: String): Dependency =
-    Dependency.of(
+    dependencyOf(
       "org.scalameta",
       s"semanticdb-scalac_$scalaVersion",
       BuildInfo.lastSupportedSemanticdb
         .getOrElse(scalaVersion, BuildInfo.scalametaVersion),
     )
+
+  def downloadDependency(
+      organization: String,
+      module: String,
+      version: String,
+  ): List[Path] = {
+    downloadDependency(dependencyOf(organization, module, version))
+  }
 
   def downloadDependency(
       dep: Dependency,
@@ -478,25 +451,23 @@ object Embedded {
       resolution: Option[ResolutionParams] = None,
       customRepositories: List[String] = Nil,
   ): List[Path] = try {
-    val settings =
-      fetchSettings(dep, scalaVersion, resolution, customRepositories)
-        .addClassifiers(classfiers: _*)
+    val settings = fetchSettings(dep, scalaVersion, resolution)
+      .addClassifiers(classfiers.map(Classifier(_)): _*)
     val withPossibleSnapshotRepo =
       // Scala 3.4.x series depends on mtags snapshot versions
       if (scalaVersion.exists(_.startsWith("3.4"))) {
         settings
           .addRepositories(
-            MavenRepository.of(
+            MavenRepository(
               "https://oss.sonatype.org/content/repositories/snapshots/"
             )
           )
       } else settings
 
     withPossibleSnapshotRepo
-      .fetch()
-      .asScala
-      .toList
+      .run()
       .map(_.toPath())
+      .toList
 
   } catch {
     case NonFatal(e) =>
@@ -532,7 +503,7 @@ object Embedded {
 
   def downloadSemanticdbJavac(): List[Path] = {
     downloadDependency(
-      Dependency.of(
+      dependencyOf(
         "com.sourcegraph",
         "semanticdb-javac",
         BuildInfo.javaSemanticdbVersion,
@@ -622,9 +593,9 @@ object Embedded {
         scribe.info(
           s"Found coursier in path under $path, using it to fetch dependency"
         )
-        val module = dependency.getModule()
+        val module = dependency.module
         val depString =
-          s"${module.getOrganization()}:${module.getName()}:${dependency.getVersion}"
+          s"${module.organization.value}:${module.name.value}:${dependency.versionConstraint.asString}"
         ShellRunner.runSync(
           List(path.toString(), "fetch", depString),
           AbsolutePath(userHome),

@@ -162,12 +162,12 @@ object DownloadDependencies {
     Files.deleteIfExists(tmp)
     Files.deleteIfExists(config)
     Embedded.downloadDependency(
-      Dependency.of(
+      Embedded.dependencyOf(
         "org.scalameta",
         s"scalafmt-cli_" + metalsBinaryVersion,
         BuildInfo.scalafmtVersion,
       ),
-      scalaVersion = Some(BuildInfo.scala213),
+      Some(BuildInfo.scala213),
     )
   }
 

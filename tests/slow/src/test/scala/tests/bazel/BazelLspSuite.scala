@@ -9,6 +9,7 @@ import scala.meta.internal.builds.ShellRunner
 import scala.meta.internal.metals.DecoderResponse
 import scala.meta.internal.metals.Directories
 import scala.meta.internal.metals.EmptyWorkDoneProgress
+import scala.meta.internal.metals.Embedded
 import scala.meta.internal.metals.FileDecoderProvider
 import scala.meta.internal.metals.Messages
 import scala.meta.internal.metals.Messages._
@@ -20,7 +21,6 @@ import scala.meta.internal.metals.clients.language.NoopLanguageClient
 import scala.meta.internal.metals.{BuildInfo => V}
 import scala.meta.io.AbsolutePath
 
-import coursierapi.Dependency
 import org.eclipse.lsp4j.MessageActionItem
 import org.eclipse.lsp4j.TextDocumentIdentifier
 import tests.BaseImportSuite
@@ -328,8 +328,9 @@ class BazelLspSuite
     for {
       _ <- shellRunner
         .runJava(
-          Dependency.of(
-            BazelBuildTool.dependency.getModule(),
+          Embedded.dependencyOf(
+            BazelBuildTool.dependency.module.organization.value,
+            BazelBuildTool.dependency.module.name.value,
             BazelBuildTool.bspVersion,
           ),
           BazelBuildTool.mainClass,

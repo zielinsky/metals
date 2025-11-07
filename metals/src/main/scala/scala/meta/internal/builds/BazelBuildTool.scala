@@ -11,7 +11,7 @@ import scala.meta.internal.metals.clients.language.MetalsLanguageClient
 import scala.meta.internal.metals.mbt.importer.BazelMbtImporter
 import scala.meta.io.AbsolutePath
 
-import coursierapi.Dependency
+import coursier.Dependency
 
 case class BazelBuildTool(
     userConfig: () => UserConfiguration,
@@ -105,7 +105,7 @@ object BazelBuildTool {
 
   val mainClass = "org.jetbrains.bsp.bazel.install.Install"
 
-  val dependency: Dependency = Dependency.of(
+  val dependency: Dependency = Embedded.dependencyOf(
     "org.virtuslab",
     "bazel-bsp",
     bspVersion,
