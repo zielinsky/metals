@@ -317,7 +317,13 @@ final class FormattingProvider(
           .mapOptionInside(_.value)
       } else {
         client
-          .showMessageRequest(MissingScalafmtVersion.messageRequest())
+          .showMessageRequest(
+            MissingScalafmtVersion.messageRequest(),
+            defaultTo = () => {
+              client.showMessage(MissingScalafmtVersion.notificationParams())
+              Messages.notNow
+            },
+          )
           .asScala
           .map { item =>
             if (item == MissingScalafmtVersion.changeVersion) {
@@ -339,7 +345,16 @@ final class FormattingProvider(
     if (!tables.dismissedNotifications.CreateScalafmtFile.isDismissed) {
       val params = MissingScalafmtConf.params()
       val action: Future[l.MessageActionItem] = defaultUserAction match {
-        case None => client.showMessageRequest(params).asScala
+        case None =>
+          client
+            .showMessageRequest(
+              params,
+              defaultTo = () => {
+                client.showMessage(MissingScalafmtConf.notificationParams())
+                MissingScalafmtConf.runDefaults
+              },
+            )
+            .asScala
         case Some(value) => Future.successful(value)
       }
       action.map { item =>
@@ -507,21 +522,33 @@ final class FormattingProvider(
               s" Directories:\n${rewrite.allDirs.mkString("- ", "\n- ", "")}"
           )
 
-          client.showMessageRequest(params).asScala.map { item =>
-            if (item == UpdateScalafmtConf.letUpdate) {
-              val text = configPath.toInputFromBuffers(buffers).text
-              val updatedText = rewrite.rewrite(text)
-              Files.write(
-                configPath.toNIO,
-                updatedText.getBytes(StandardCharsets.UTF_8),
-              )
-            } else if (item == Messages.notNow) {
-              tables.dismissedNotifications.UpdateScalafmtConf
-                .dismiss(24, TimeUnit.HOURS)
-            } else if (item == Messages.dontShowAgain) {
-              tables.dismissedNotifications.UpdateScalafmtConf.dismissForever()
-            } else ()
-          }
+          client
+            .showMessageRequest(
+              params,
+              defaultTo = () => {
+                client.showMessage(
+                  UpdateScalafmtConf.notificationParams(rewrite.maxDialect)
+                )
+                Messages.notNow
+              },
+            )
+            .asScala
+            .map { item =>
+              if (item == UpdateScalafmtConf.letUpdate) {
+                val text = configPath.toInputFromBuffers(buffers).text
+                val updatedText = rewrite.rewrite(text)
+                Files.write(
+                  configPath.toNIO,
+                  updatedText.getBytes(StandardCharsets.UTF_8),
+                )
+              } else if (item == Messages.notNow) {
+                tables.dismissedNotifications.UpdateScalafmtConf
+                  .dismiss(24, TimeUnit.HOURS)
+              } else if (item == Messages.dontShowAgain) {
+                tables.dismissedNotifications.UpdateScalafmtConf
+                  .dismissForever()
+              } else ()
+            }
         case None => Future.unit
       }
     }

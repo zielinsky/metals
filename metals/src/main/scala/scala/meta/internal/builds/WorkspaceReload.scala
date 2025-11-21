@@ -72,7 +72,15 @@ final class WorkspaceReload(
       ImportBuildChanges.params(buildTool.toString) ->
         ImportBuildChanges.yes
     languageClient
-      .showMessageRequest(params)
+      .showMessageRequest(
+        params,
+        defaultTo = () => {
+          languageClient.showMessage(
+            ImportBuildChanges.notificationParams(buildTool.executableName)
+          )
+          ImportBuildChanges.notNow
+        },
+      )
       .asScala
       .map { item =>
         if (item == dontShowAgain) {

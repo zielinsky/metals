@@ -19,6 +19,13 @@ import org.eclipse.lsp4j.WorkDoneProgressCreateParams
  * or log messages are published during shutdown.
  */
 abstract class NoopLanguageClient extends MetalsLanguageClient {
+
+  override def showMessageRequest(
+      params: ShowMessageRequestParams,
+      defaultTo: () => MessageActionItem,
+  ): CompletableFuture[MessageActionItem] = {
+    showMessageRequest(params)
+  }
   override def metalsStatus(params: MetalsStatusParams): Unit = ()
 
   override def metalsSyncStatus(params: MetalsSyncStatusParams): Unit = ()
@@ -81,4 +88,4 @@ abstract class NoopLanguageClient extends MetalsLanguageClient {
   ): Unit = ()
 }
 
-object NoopLanguageClient extends NoopLanguageClient
+object NoopLanguageClient extends NoopLanguageClient {}

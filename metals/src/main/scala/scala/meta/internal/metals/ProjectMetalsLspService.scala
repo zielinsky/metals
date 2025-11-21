@@ -493,7 +493,14 @@ class ProjectMetalsLspService(
       languageClient
         .showMessageRequest(
           Messages.ProjectJavaHomeUpdate
-            .params(isRestart = !session.main.isBloop)
+            .params(isRestart = !session.main.isBloop),
+          defaultTo = () => {
+            languageClient.showMessage(
+              Messages.ProjectJavaHomeUpdate
+                .notificationParams()
+            )
+            Messages.ProjectJavaHomeUpdate.notNow
+          },
         )
         .asScala
         .flatMap {
@@ -534,7 +541,8 @@ class ProjectMetalsLspService(
         .showMessageRequest(
           FileOutOfScalaCliBspScope.askToRegenerateConfigAndRestartBsp(
             file.toNIO
-          )
+          ),
+          defaultTo = () => { FileOutOfScalaCliBspScope.regenerateAndRestart },
         )
         .asScala
         .flatMap {
@@ -877,7 +885,10 @@ class ProjectMetalsLspService(
 
       def askAutoImport(notification: DismissedNotifications#Notification) =
         languageClient
-          .showMessageRequest(Messages.ImportAllScripts.params())
+          .showMessageRequest(
+            Messages.ImportAllScripts.params(),
+            defaultTo = () => { Messages.ImportAllScripts.importAll },
+          )
           .asScala
           .onComplete {
             case Failure(e) =>
@@ -885,7 +896,7 @@ class ProjectMetalsLspService(
             case Success(null) =>
               scribe.debug("Automatic Scala scripts import cancelled by user")
             case Success(resp) =>
-              resp.getTitle match {
+              resp match {
                 case Messages.ImportAllScripts.importAll =>
                   notification.dismissForever()
                 case _ =>
@@ -897,11 +908,14 @@ class ProjectMetalsLspService(
           doImportScalaCli()
         } else {
           languageClient
-            .showMessageRequest(Messages.ImportScalaScript.params())
+            .showMessageRequest(
+              Messages.ImportScalaScript.params(),
+              defaultTo = () => { Messages.ImportScalaScript.doImportScalaCli },
+            )
             .asScala
             .flatMap { response =>
               if (response != null)
-                response.getTitle match {
+                response match {
                   case Messages.ImportScalaScript.doImportScalaCli =>
                     askAutoImport(
                       tables.dismissedNotifications.ScalaCliImportAuto

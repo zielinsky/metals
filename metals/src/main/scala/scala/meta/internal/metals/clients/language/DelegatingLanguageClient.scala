@@ -32,6 +32,13 @@ class DelegatingLanguageClient(var underlying: MetalsLanguageClient)
   override def metalsSyncModes(params: MetalsSyncModesParams): Unit = {
     underlying.metalsSyncModes(params)
   }
+  
+  override def showMessageRequest(
+      params: ShowMessageRequestParams,
+      defaultTo: () => MessageActionItem,
+  ): CompletableFuture[MessageActionItem] = {
+    underlying.showMessageRequest(params, defaultTo)
+  }
 
   override def registerCapability(
       params: RegistrationParams
