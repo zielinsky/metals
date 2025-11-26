@@ -1133,14 +1133,10 @@ class Compilers(
           pc.definition(CompilerOffsetParamsUtils.fromPos(pos, token))
       defResult.asScala
         .map { c =>
-          adjust.adjustLocations(c.locations())
-          val definitionPaths = c
-            .locations()
-            .map { loc =>
-              loc.getUri().toAbsolutePath
-            }
-            .asScala
-            .toSet
+          val adjustedLocations = adjust.adjustLocations(c.locations())
+          val definitionPaths = adjustedLocations.asScala.map { loc =>
+            loc.getUri().toAbsolutePath
+          }.toSet
 
           val definitionPath = if (definitionPaths.size == 1) {
             Some(definitionPaths.head)
@@ -1148,7 +1144,7 @@ class Compilers(
             None
           }
           DefinitionResult(
-            c.locations(),
+            adjustedLocations,
             c.symbol(),
             definitionPath,
             None,
