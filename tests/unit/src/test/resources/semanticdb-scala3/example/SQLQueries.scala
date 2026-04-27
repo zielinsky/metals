@@ -1,27 +1,47 @@
-package example
+   package example
+//         ^^^^^^^ definition example/
 
-class SQLQueries/*example.SQLQueries#*/ {
-    implicit class SQLStringContext/*example.SQLQueries#SQLStringContext#*/(sc/*example.SQLQueries#SQLStringContext#sc.*/: StringContext/*scala.StringContext#*/) {
-        def sql/*example.SQLQueries#SQLStringContext#sql().*/(args/*example.SQLQueries#SQLStringContext#sql().(args)*/: Any/*scala.Any#*/*): String/*scala.Predef.String#*/ = sc/*example.SQLQueries#SQLStringContext#sc.*/.s/*scala.StringContext#s().*/(args/*example.SQLQueries#SQLStringContext#sql().(args)*/: _*)
-    }
+   class SQLQueries {
+//       ^^^^^^^^^^ definition example/SQLQueries#
+       implicit class SQLStringContext(sc: StringContext) {
+//     ^ definition example/SQLQueries#`<init>`().
+//                    ^^^^^^^^^^^^^^^^ definition example/SQLQueries#SQLStringContext#
+//                                    ^ definition example/SQLQueries#SQLStringContext#`<init>`().
+//                                     ^^ definition example/SQLQueries#SQLStringContext#sc.
+//                                         ^^^^^^^^^^^^^ reference scala/StringContext#
+           def sql(args: Any*): String = sc.s(args: _*)
+//             ^^^ definition example/SQLQueries#SQLStringContext#sql().
+//                 ^^^^ definition example/SQLQueries#SQLStringContext#sql().(args)
+//                       ^^^ reference scala/Any#
+//                              ^^^^^^ reference scala/Predef.String#
+//                                       ^^ reference example/SQLQueries#SQLStringContext#sc.
+//                                          ^ reference scala/StringContext#s().
+//                                            ^^^^ reference example/SQLQueries#SQLStringContext#sql().(args)
+       }
 
-    val createTableQuery/*example.SQLQueries#createTableQuery.*/ = sql/*example.SQLQueries#SQLStringContext#sql().*/"""
-        CREATE TABLE users (
-            id INT PRIMARY KEY,
-            name VARCHAR(100),
-            age DECIMAL(3, 1),
-            created_at TIMESTAMP
-        )
-        """
+       val createTableQuery = sql"""
+//         ^^^^^^^^^^^^^^^^ definition example/SQLQueries#createTableQuery.
+//                            ^^^ reference example/SQLQueries#SQLStringContext#sql().
+           CREATE TABLE users (
+               id INT PRIMARY KEY,
+               name VARCHAR(100),
+               age DECIMAL(3, 1),
+               created_at TIMESTAMP
+           )
+           """
 
-    val selectQuery/*example.SQLQueries#selectQuery.*/ = sql/*example.SQLQueries#SQLStringContext#sql().*/"""
-        SELECT name, age
-        FROM users
-        WHERE age > 30.5
-        """
+       val selectQuery = sql"""
+//         ^^^^^^^^^^^ definition example/SQLQueries#selectQuery.
+//                       ^^^ reference example/SQLQueries#SQLStringContext#sql().
+           SELECT name, age
+           FROM users
+           WHERE age > 30.5
+           """
 
-    val insertQuery/*example.SQLQueries#insertQuery.*/ = sql/*example.SQLQueries#SQLStringContext#sql().*/"""
-        INSERT INTO users (id, name, age, created_at)
-        VALUES (1, 'John Doe', 25, CURRENT_TIMESTAMP)
-        """
-}
+       val insertQuery = sql"""
+//         ^^^^^^^^^^^ definition example/SQLQueries#insertQuery.
+//                       ^^^ reference example/SQLQueries#SQLStringContext#sql().
+           INSERT INTO users (id, name, age, created_at)
+           VALUES (1, 'John Doe', 25, CURRENT_TIMESTAMP)
+           """
+   }
