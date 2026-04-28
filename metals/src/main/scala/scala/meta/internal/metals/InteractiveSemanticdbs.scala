@@ -81,7 +81,9 @@ final class InteractiveSemanticdbs(
           source.isMill || // mill files
           source.isProtoFilename || // protobuf files (no semanticdb-scalac)
           source.isWorksheet || // worksheets
-          doesNotBelongToBuildTarget || // standalone files
+          doesNotBelongToBuildTarget && buffers.contains(
+            source
+          ) || // standalone files that are opened
           scalaCliServers.loadedExactly(source) || // scala-cli single files
           sourceText.exists(
             _.startsWith(Shebang.shebang)
