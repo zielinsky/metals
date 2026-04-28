@@ -103,7 +103,7 @@ class IndexedSymbols(
 
   private def javaSymbols(in: AbsolutePath) = {
     val indexer = mtags().config.javaInstance(
-      Input.VirtualFile(in.toString(), buffers.get(in).getOrElse(in.readText)),
+      Input.VirtualFile(in.toURI.toString(), buffers.get(in).getOrElse(in.readText)),
       includeMembers = true,
     )
     indexer

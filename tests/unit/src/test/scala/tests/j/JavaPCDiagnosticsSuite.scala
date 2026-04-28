@@ -5,6 +5,7 @@ import scala.meta.internal.metals.MetalsEnrichments._
 import coursierapi.Dependency
 import coursierapi.Fetch
 import org.eclipse.{lsp4j => l}
+import scala.util.Properties
 
 class JavaPCDiagnosticsSuite extends BaseJavaPCSuite("java-pc-diagnostics") {
 
@@ -292,13 +293,19 @@ class JavaPCDiagnosticsSuite extends BaseJavaPCSuite("java-pc-diagnostics") {
     val (sourceJars, classJars) =
       fetched.partition(_.getFileName.toString.endsWith("-sources.jar"))
 
+    def escape(str: String) = {
+      if (Properties.isWin)
+        str.replace("\\", "\\\\")
+      else
+        str
+    }
     val mbtJson =
       s"""|{
           |  "dependencyModules": [
           |    {
           |      "id": "com.google.guava:guava:33.5.0-jre",
-          |      "jar": "${classJars.head.toString}",
-          |      "sources": "${sourceJars.head.toString}"
+          |      "jar": "${escape(classJars.head.toString)}",
+          |      "sources": "${escape(sourceJars.head.toString)}"
           |    }
           |  ]
           |}""".stripMargin

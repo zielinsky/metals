@@ -34,6 +34,7 @@ import coursierapi.MavenRepository
 import coursierapi.Repository
 import coursierapi.ResolutionParams
 import mdoc.interfaces.Mdoc
+import java.nio.file.FileSystemException
 
 /**
  * Wrapper around software that is embedded with Metals.
@@ -100,14 +101,21 @@ final class Embedded(
 
   lazy val javaHeaderCompiler: AbsolutePath = {
     val out = workspace.resolve(Directories.javaHeaderCompiler)
-    out.parent.createDirectories()
-    Files.copy(
-      this.getClass.getResourceAsStream("/java-header-compiler.jar"),
-      out.toNIO,
-      StandardCopyOption.REPLACE_EXISTING,
-    )
-    out
+    try {
+      out.parent.createDirectories()
+      Files.copy(
+        this.getClass.getResourceAsStream("/java-header-compiler.jar"),
+        out.toNIO,
+        StandardCopyOption.REPLACE_EXISTING,
+      )
+      out
+    } catch {
+      case fs: FileSystemException if Properties.isWin =>
+        scribe.warn(s"Could not replace $out", fs)
+        out
+    }
   }
+  
   def presentationCompiler(
       mtags: MtagsBinaries.Artifacts
   ): PresentationCompiler = {

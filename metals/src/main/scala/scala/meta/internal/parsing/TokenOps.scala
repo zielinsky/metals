@@ -1,6 +1,6 @@
 package scala.meta.internal.parsing
 
-import scala.meta.XtensionStructure
+import scala.meta._
 import scala.meta.inputs.Input
 import scala.meta.inputs.Position
 import scala.meta.tokens.Token
@@ -61,7 +61,9 @@ object TokenOps {
   private object ScalaTokenEqualizer extends Equalizer[Token] {
     override def equals(original: Token, revised: Token): Boolean =
       original.productPrefix == revised.productPrefix &&
-        original.pos.text == revised.pos.text
+        original.pos.text == revised.pos.text || 
+        original.is[Token.LF] && revised.is[Token.CRLF] ||
+        original.is[Token.CRLF] && revised.is[Token.LF]
 
   }
 

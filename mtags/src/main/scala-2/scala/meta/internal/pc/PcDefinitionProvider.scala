@@ -118,11 +118,15 @@ class PcDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {
         if (sourceBasedDefs.locations.isEmpty && symbol.associatedFile.exists) {
           symbol.associatedFile.underlyingSource match {
             case Some(jarFile) if jarFile.name.endsWith(".jar") =>
+              val baseUri =
+                if (jarFile.file != null) jarFile.file.toURI().toString
+                else
+                  s"file:${jarFile.path}"
               DefinitionResultImpl(
                 semanticdbSymbol(symbol),
                 List(
                   new Location(
-                    s"jar:file:${jarFile.path}!/${symbol.associatedFile.path}",
+                    s"jar:${baseUri}!/${symbol.associatedFile.path}",
                     new l.Range(new l.Position(0, 0), new l.Position(0, 0))
                   )
                 ).asJava,

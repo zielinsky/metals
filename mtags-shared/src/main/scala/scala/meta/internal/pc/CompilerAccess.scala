@@ -157,7 +157,8 @@ abstract class CompilerAccess[Reporter, Compiler](
             retryWithCleanCompiler(
               thunk,
               default,
-              message
+              message,
+              other
             )
           }
           .getOrElse {
@@ -175,11 +176,13 @@ abstract class CompilerAccess[Reporter, Compiler](
   private def retryWithCleanCompiler[T](
       thunk: CompilerWrapper[Reporter, Compiler] => T,
       default: T,
-      cause: String
+      message: String,
+      cause: Throwable
   )(implicit queryInfo: PcQueryContext): T = {
     shutdownCurrentCompiler()
-    logger.info(
-      s"compiler crashed due to $cause, retrying with new compiler instance."
+    logger.warn(
+      s"compiler crashed due to $message, retrying with new compiler instance.",
+      cause
     )
     try thunk(loadCompiler())
     catch {
