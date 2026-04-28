@@ -450,8 +450,9 @@ object Embedded {
       resolution: Option[ResolutionParams] = None,
       customRepositories: List[String] = Nil,
   ): List[Path] = try {
-    val settings = fetchSettings(dep, scalaVersion, resolution, customRepositories)
-      .addClassifiers(classfiers: _*)
+    val settings =
+      fetchSettings(dep, scalaVersion, resolution, customRepositories)
+        .addClassifiers(classfiers: _*)
     val withPossibleSnapshotRepo =
       // Scala 3.4.x series depends on mtags snapshot versions
       if (scalaVersion.exists(_.startsWith("3.4"))) {

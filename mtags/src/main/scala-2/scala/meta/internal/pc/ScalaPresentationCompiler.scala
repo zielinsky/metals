@@ -966,7 +966,7 @@ case class ScalaPresentationCompiler(
           if scalaVersion.startsWith("2.13") && !withClearedCaches =>
         val cleared = JrtClasspathCompat.clearJrtClassPathCaches(logger)
         if (cleared) {
-          logger.warning(
+          logger.warn(
             s"Cleared JrtClassPath caches, to try and fix `${e.getMessage()}`"
           )
           newCompiler(withClearedCaches = true)

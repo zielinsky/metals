@@ -1,6 +1,6 @@
 package scala.meta.internal.pc
 
-import java.util.logging.Logger
+import org.slf4j.Logger
 
 object JrtClasspathCompat {
 

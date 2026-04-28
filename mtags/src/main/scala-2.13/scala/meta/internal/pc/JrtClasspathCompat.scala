@@ -1,9 +1,9 @@
 package scala.meta.internal.pc
 
-import java.util.logging.Logger
-
 import scala.tools.nsc.classpath.FileBasedCache
 import scala.tools.nsc.classpath.JrtClassPath
+
+import org.slf4j.Logger
 
 object JrtClasspathCompat {
 
@@ -37,7 +37,7 @@ object JrtClasspathCompat {
       true
     } catch {
       case e: Exception =>
-        logger.warning(
+        logger.warn(
           s"Failed to clear JrtClassPath caches: ${e.getMessage}"
         )
         false
