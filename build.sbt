@@ -14,9 +14,11 @@ Global / resolvers += "scala-integration" at
 // Make sure to bump up this version when we merge with upstream.
 val forkBaseVersion = "1.6.0"
 
+val currentVersion = "2.0.0"
+
 def localSnapshotVersion = sys.env.getOrElse(
   "METALS_VERSION",
-  s"$forkBaseVersion-${sys.env.getOrElse("METALS_VERSION_SUFFIX", "SNAPSHOT")}",
+  s"$currentVersion-${sys.env.getOrElse("METALS_VERSION_SUFFIX", "SNAPSHOT")}",
 )
 def isCI = System.getenv("CI") != null
 def isTest = System.getenv("METALS_TEST") != null
