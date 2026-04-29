@@ -11,6 +11,7 @@ import scala.meta.internal.metals.ScalaVersions
 import scala.meta.io.AbsolutePath
 
 import ch.epfl.scala.bsp4j
+import java.nio.file.Paths
 
 case class MbtTarget(
     name: String,
@@ -80,8 +81,9 @@ case class MbtTarget(
       ju.Collections.emptyList(),
     )
     val jvmBt = new bsp4j.JvmBuildTarget()
+    val javaPath = Paths.get(javaHome.getOrElse(Properties.javaHome))
     jvmBt.setJavaHome(
-      javaHome.getOrElse(Properties.javaHome)
+      javaPath.toUri().toString()
     )
     scalaTarget.setJvmBuildTarget(jvmBt)
 

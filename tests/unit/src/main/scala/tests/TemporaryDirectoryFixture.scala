@@ -21,8 +21,7 @@ class TemporaryDirectoryFixture extends munit.Fixture[AbsolutePath]("tmp-dir") {
       AbsolutePath(p).deleteRecursively()
     } catch {
       case fs: FileSystemException =>
-        scribe.warn("Could not delete directory due to exception", fs)
-
+        scribe.warn("Could not delete directory due to exception")
     }
   }
 

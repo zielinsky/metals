@@ -17,6 +17,7 @@ import tests.BaseCompletionLspSuite
 import tests.BuildInfo
 import tests.Library
 import tests.TestHovers
+import scala.util.Properties
 
 /**
  * End-to-end checks for `.metals/mbt.json` with the built-in MBT BSP server:
@@ -45,77 +46,79 @@ class MbtBuildServerLspSuite
   private def targetIds: Set[String] =
     server.server.buildTargets.allBuildTargetIds.map(_.getUri).toSet
 
-  test("script-import-then-mbt-server") {
-    cleanWorkspace()
-    val scalaBinary = BuildInfo.scalaVersion.split("\\.").take(2).mkString(".")
-    val xmlJar = Fetch
-      .create()
-      .withMainArtifacts()
-      .withDependencies(
-        Dependency
-          .of("org.scala-lang.modules", s"scala-xml_$scalaBinary", "2.3.0")
-          .withTransitive(false)
-      )
-      .fetch()
-      .asScala
-      .map(_.toPath)
-      .head
-    val mbtJson =
-      s"""|{
-          |  "dependencyModules": [
-          |    {
-          |      "id": "org.scala-lang.modules:scala-xml_$scalaBinary:2.3.0",
-          |      "jar": "$xmlJar"
-          |    }
-          |  ],
-          |  "namespaces": {
-          |    "core": {
-          |      "sources": ["src/**"],
-          |      "scalaVersion": "${BuildInfo.scalaVersion}",
-          |      "dependencyModules": [
-          |        "org.scala-lang.modules:scala-xml_$scalaBinary:2.3.0"
-          |      ]
-          |    }
-          |  }
-          |}""".stripMargin
-    val script =
-      s"""|#!/bin/sh
-          |printf '$mbtJson' > "$$MBT_OUTPUT_FILE"
-          |""".stripMargin
-
-    for {
-      _ <- initialize(
-        s"""|/build.mbt.sh
-            |$script
-            |/src/Main.scala
-            |package example
-            |
-            |import scala.xml.XML
-            |
-            |object Main {
-            |  val doc = XML.loadString("<root/>")
-            |}
+  if (!Properties.isWin)
+    test("script-import-then-mbt-server") {
+      cleanWorkspace()
+      val scalaBinary =
+        BuildInfo.scalaVersion.split("\\.").take(2).mkString(".")
+      val xmlJar = Fetch
+        .create()
+        .withMainArtifacts()
+        .withDependencies(
+          Dependency
+            .of("org.scala-lang.modules", s"scala-xml_$scalaBinary", "2.3.0")
+            .withTransitive(false)
+        )
+        .fetch()
+        .asScala
+        .map(_.toPath)
+        .head
+      val mbtJson =
+        s"""|{
+            |  "dependencyModules": [
+            |    {
+            |      "id": "org.scala-lang.modules:scala-xml_$scalaBinary:2.3.0",
+            |      "jar": "$xmlJar"
+            |    }
+            |  ],
+            |  "namespaces": {
+            |    "core": {
+            |      "sources": ["src/**"],
+            |      "scalaVersion": "${BuildInfo.scalaVersion}",
+            |      "dependencyModules": [
+            |        "org.scala-lang.modules:scala-xml_$scalaBinary:2.3.0"
+            |      ]
+            |    }
+            |  }
+            |}""".stripMargin
+      val script =
+        s"""|#!/bin/sh
+            |printf '$mbtJson' > "$$MBT_OUTPUT_FILE"
             |""".stripMargin
-      )
-      _ = assertConnectedToBuildServer("MBT")
-      _ <- server.didChangeWatchedFiles(".metals/mbt.json")
-      _ <- server.didOpen("src/Main.scala")
-      _ <- server.assertHover(
-        "src/Main.scala",
-        """|package example
-           |
-           |import scala.xml.XML
-           |
-           |object Main {
-           |  val doc = XML.load@@String("<root/>")
-           |}""".stripMargin,
-        """|```scala
-           |def loadString(string: String): Elem
-           |```
-           |""".stripMargin.hover,
-      )
-    } yield ()
-  }
+
+      for {
+        _ <- initialize(
+          s"""|/build.mbt.sh
+              |$script
+              |/src/Main.scala
+              |package example
+              |
+              |import scala.xml.XML
+              |
+              |object Main {
+              |  val doc = XML.loadString("<root/>")
+              |}
+              |""".stripMargin
+        )
+        _ = assertConnectedToBuildServer("MBT")
+        _ <- server.didChangeWatchedFiles(".metals/mbt.json")
+        _ <- server.didOpen("src/Main.scala")
+        _ <- server.assertHover(
+          "src/Main.scala",
+          """|package example
+             |
+             |import scala.xml.XML
+             |
+             |object Main {
+             |  val doc = XML.load@@String("<root/>")
+             |}""".stripMargin,
+          """|```scala
+             |def loadString(string: String): Elem
+             |```
+             |""".stripMargin.hover,
+        )
+      } yield ()
+    }
 
   test("two-targets-hover-definition-completion") {
     cleanWorkspace()
@@ -142,7 +145,7 @@ class MbtBuildServerLspSuite
          |      ]
          |    },
          |    "extra": {
-         |      "sources": ["extra/src"],
+         |      "sources": ["extra/src/**"],
          |      "scalaVersion": "${BuildInfo.scalaVersion}",
          |      "dependencyModules": [
          |        "org.scala-lang:scala-library:${BuildInfo.scalaVersion}"
@@ -224,13 +227,7 @@ class MbtBuildServerLspSuite
       )
       _ <- server.didFocus(coreService)
       _ <- assertCompletion(
-        """|package core
-           |
-           |import core.service.Service
-           |
-           |object Model {
-           |  def answer = Service.text@@
-           |}""".stripMargin,
+        "def answer = Service.text@@",
         "text: String",
         filename = Some(coreModel),
       )
@@ -257,12 +254,7 @@ class MbtBuildServerLspSuite
       )
       _ <- server.didFocus(extraApp)
       _ <- assertCompletion(
-        """|package extra
-           |import core.Model
-           |
-           |object App {
-           |  def run() = Model.answer@@
-           |}""".stripMargin,
+        "def run() = Model.answer@@",
         "answer: String",
         filename = Some(extraApp),
       )
