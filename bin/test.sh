@@ -13,7 +13,7 @@ function run_with_restart_loop {
     echo "Attempt $attempt/$max_attempts: Running bloop command..."
 
     # Run the command with timeout
-    timeout $timeout_seconds ./coursier launch -M bloop.cli.Bloop -r sonatype:snapshots ch.epfl.scala:bloop-cli_2.13:$(bloop_version) -- about
+    timeout $timeout_seconds ./coursier launch -M bloop.cli.Bloop -r https://central.sonatype.com/repository/maven-snapshots/ ch.epfl.scala:bloop-cli_2.13:$(bloop_version) -- about
     local exit_code=$?
 
     if [ $exit_code -eq 0 ]; then
@@ -37,7 +37,7 @@ function run_with_restart_loop {
   return 1
 }
 
-export COURSIER_REPOSITORIES="central|https://central.sonatype.com/repository/maven-snapshots/"
+export COURSIER_REPOSITORIES="central|ivy2local|https://central.sonatype.com/repository/maven-snapshots/"
 export BLOOP_JAVA_OPTS="-Xss4m -Xmx2G -XX:MaxInlineLevel=20 -XX:+UseZGC -XX:ZUncommitDelay=30 -XX:ZCollectionInterval=5 -XX:+IgnoreUnrecognizedVMOptions -Dbloop.ignore-sig-int=true"
 
 mkdir -p ~/.bloop

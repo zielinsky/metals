@@ -19,6 +19,7 @@ import scala.compat.java8.FutureConverters
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.Future
+import scala.reflect.internal.FatalError
 import scala.reflect.io.VirtualDirectory
 import scala.tools.nsc.ParsedLogicalPackage
 import scala.tools.nsc.Settings
@@ -857,7 +858,7 @@ case class ScalaPresentationCompiler(
 
   override def buildTargetId(): String = buildTargetIdentifier
 
-  def newCompiler(): MetalsGlobal = {
+  def newCompiler(withClearedCaches: Boolean = false): MetalsGlobal = {
     val classpath = this.classpath.mkString(File.pathSeparator)
     val vd = new VirtualDirectory("(memory)", None)
     val settings = new Settings
@@ -944,21 +945,37 @@ case class ScalaPresentationCompiler(
     if (unprocessed.nonEmpty || !isSuccess) {
       logger.warn(s"Unknown compiler options: ${unprocessed.mkString(", ")}")
     }
-    // settings are needed during the constructor of interactive.Global
-    // and the reporter doesn't have a reference to global yet
-    val reporter = new MetalsReporter(settings)
-    val mg = new MetalsGlobal(
-      settings,
-      reporter,
-      search,
-      buildTargetIdentifier,
-      config,
-      folderPath,
-      completionItemPriority,
-      rootSrcPackage
-    )
-    reporter._metalsGlobal = mg
-    mg
+    try {
+      // settings are needed during the constructor of interactive.Global
+      // and the reporter doesn't have a reference to global yet
+      val reporter = new MetalsReporter(settings)
+      val mg = new MetalsGlobal(
+        settings,
+        reporter,
+        search,
+        buildTargetIdentifier,
+        config,
+        folderPath,
+        completionItemPriority,
+        rootSrcPackage
+      )
+      reporter._metalsGlobal = mg
+      mg
+    } catch {
+      case e: FatalError
+          if scalaVersion.startsWith("2.13") && !withClearedCaches =>
+        val cleared = JrtClasspathCompat.clearJrtClassPathCaches(logger)
+        if (cleared) {
+          logger.warn(
+            s"Cleared JrtClassPath caches, to try and fix `${e.getMessage()}`"
+          )
+          newCompiler(withClearedCaches = true)
+        } else {
+          throw e
+        }
+      case e: FatalError =>
+        throw e
+    }
   }
 
   // ================

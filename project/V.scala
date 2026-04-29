@@ -7,7 +7,7 @@ object V {
   val scala213 = "2.13.18"
   val scala3 = "3.3.6"
   val scala3ForSBT2 = "3.6.4"
-  val latestScala3Next = "3.6.4"
+  val latestScala3Next = "3.7.2"
 
   // When you can add to removedScalaVersions in MtagsResolver.scala with the last released version
   val sbtScala = "2.12.21"
@@ -15,7 +15,7 @@ object V {
   // Rules need to be manually updated to support
   val bazelScalaVersion = "2.13.12"
   val betterMonadicFor = "0.3.1"
-  val bloop = "2.0.12"
+  val bloop = "2.0.13"
   val bloopConfig = "2.3.2"
   val bsp = "2.2.0-M2"
   val coursier = "2.1.24"
@@ -32,13 +32,13 @@ object V {
   val kindProjector = "0.13.4"
   val lsp4jV = "0.24.0"
   val mavenBloop = "2.0.1"
-  val mill = "1.0.1"
+  val mill = "1.0.3"
   val mdoc = "2.7.2"
   val munit = "1.2.3"
   val pprint = "0.7.3"
   val sbtBloop = bloop
   val sbtJdiTools = "1.2.0"
-  val scalaCli = "1.8.4"
+  val scalaCli = "1.8.5"
   val scalafix = "0.14.3"
   val scalafmt = "3.7.15"
   val scalameta = "4.14.4"

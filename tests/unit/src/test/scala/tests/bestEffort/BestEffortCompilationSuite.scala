@@ -1,12 +1,14 @@
 package tests.bestEffort
 
+import scala.meta.internal.metals.BuildInfo
 import scala.meta.internal.metals.MetalsServerConfig
 
 import tests.BaseNonCompilingLspSuite
 
 class BestEffortCompilationSuite
     extends BaseNonCompilingLspSuite("best-effort-compilation") {
-  val scalaVersion = "3.7.3"
+
+  val scalaVersion = BuildInfo.latestScala3Next
 
   override def serverConfig: MetalsServerConfig =
     super.serverConfig.copy(enableBestEffort = true)
