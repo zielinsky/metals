@@ -826,12 +826,12 @@ abstract class MetalsLspService(
                   } else {
                     Future.unit
                   }
-                }.flatten,
+                },
                 Future(workspaceSymbols.indexClasspath()),
                 Future(formattingProvider.load()),
               )
             )
-      } yield ()
+      } yield {}
     } else Future.unit
 
   def onShutdown(): Unit = {
@@ -1804,7 +1804,7 @@ abstract class MetalsLspService(
             occ.symbol
           }
           .orElse {
-            Mtags
+            mtags
               .index(path, dialect)
               .occurrences
               .filter(_.range.exists(_.encloses(pos)))

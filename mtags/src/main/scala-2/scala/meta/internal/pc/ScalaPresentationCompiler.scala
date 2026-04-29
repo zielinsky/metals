@@ -541,7 +541,7 @@ case class ScalaPresentationCompiler(
         .withNonInterruptableCompiler(item, EmptyCancelToken) { pc =>
           new CompletionItemResolver(pc.compiler()).resolve(item, symbol)
         }(emptyQueryContext)
-        .get(1, TimeUnit.SECONDS)
+        .get(2, TimeUnit.SECONDS)
     }
 
   override def signatureHelp(

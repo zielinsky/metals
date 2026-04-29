@@ -144,7 +144,8 @@ class SymbolIndexBucket(
       isJava: Boolean
   ): IndexingResult = {
     val uri = source.toIdeallyRelativeURI(sourceDirectory)
-    val (doc, overrides, toplevelMembers) = mtags().extendedIndexing(source, dialect)
+    val (doc, overrides, toplevelMembers) =
+      mtags().extendedIndexing(source, dialect)
     val sourceTopLevels =
       doc.occurrences.iterator
         .filterNot(_.symbol.isPackage)

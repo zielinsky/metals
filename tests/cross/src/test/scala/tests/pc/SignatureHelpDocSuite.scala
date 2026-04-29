@@ -36,6 +36,23 @@ class SignatureHelpDocSuite extends BaseSignatureHelpSuite {
       "option.map(f).getOrElse(ifEmpty)"
     )
 
+  val foldSecondParam: String =
+    s"""$foldLatestDocs
+       |**Parameters**
+       |- `ifEmpty`: the expression to evaluate if empty.
+       |- `f`: the function to apply if nonempty.
+       |fold[B](ifEmpty: => B)(f: Int => B): B
+       |                       ^^^^^^^^^^^
+       |  @param ifEmpty the expression to evaluate if empty.
+       |  @param f the function to apply if nonempty.
+        """.stripMargin
+
+  val post21317FoldSecondParam: String =
+    foldSecondParam.replace(
+      "option map f getOrElse ifEmpty",
+      "option.map(f).getOrElse(ifEmpty)"
+    )
+
   val foldOlderDocs1: String =
     """|Returns the result of applying `f` to this [scala.Option](scala.Option)'s
        | value if the [scala.Option](scala.Option) is nonempty.  Otherwise, evaluates

@@ -79,7 +79,6 @@ class MetalsGlobal(
   lazy val logger: Logger =
     org.slf4j.LoggerFactory.getLogger(classOf[MetalsGlobal])
 
-
   val richCompilationCache: TrieMap[String, RichCompilationUnit] =
     TrieMap.empty[String, RichCompilationUnit]
 

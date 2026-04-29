@@ -2,6 +2,8 @@ package tests
 
 import scala.concurrent.Future
 
+import scala.meta.internal.metals.Configs.DefinitionIndexStrategy
+import scala.meta.internal.metals.UserConfiguration
 import scala.meta.internal.metals.{BuildInfo => V}
 
 import munit.Location
@@ -9,6 +11,9 @@ import munit.Location
 class CompletionLspSuite extends BaseCompletionLspSuite("completion") {
 
   override def munitIgnore: Boolean = isWindows
+
+  override def userConfig: UserConfiguration = super.userConfig
+    .copy(definitionIndexStrategy = DefinitionIndexStrategy.sources)
 
   test("basic-213") {
     basicTest(V.scala213)

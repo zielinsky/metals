@@ -372,7 +372,7 @@ class BazelLspSuite
       _ <- server.didOpen("Hello.scala")
       _ = assertNoDiff(
         projectview.readText,
-        BazelBuildTool.fallbackProjectView(workspace),
+        BazelBuildTool.fallbackProjectView,
       )
       _ <- server.didChange("Hello.scala") { text =>
         text.replace("def hello: String", "def hello: Int")
@@ -405,7 +405,7 @@ class BazelLspSuite
       )
       _ = assertNoDiff(
         projectview.readText,
-        BazelBuildTool.fallbackProjectView(workspace),
+        BazelBuildTool.fallbackProjectView,
       )
     } yield ()
   }

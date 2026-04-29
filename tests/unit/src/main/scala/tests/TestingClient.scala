@@ -304,7 +304,9 @@ class TestingClient(workspace: AbsolutePath, val buffers: Buffers)
   }
   def workspaceDiagnostics: String = {
     val paths = diagnostics.keys.toList
-      .filter(f => f.isScalaOrJava || f.extension == "conf")
+      .filter(f =>
+        f.isScalaOrJava || f.isProtoFilename || f.extension == "conf"
+      )
       .sortBy(_.toURI.toString)
     paths.map(pathDiagnostics).mkString
   }

@@ -777,11 +777,11 @@ class ConnectionProvider(
                 case Some(value) =>
                   Future.successful(Some(value))
                 case None =>
-                  buildToolProvider.supportedBuildTool().map(_.map(_.buildTool))
+                  buildToolProvider.loadSingleBuildTool()
               }
             buildToolOpt.flatMap { toolOpt =>
               bspConnector.connect(
-                buildToolProvider.buildTool,
+                toolOpt,
                 folder,
                 () => userConfig,
                 shellRunner,

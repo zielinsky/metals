@@ -539,10 +539,8 @@ object TestFrameworkSymbolRegistry {
       .map(_ -> TestFrameworkUtils.ZioTestFramework)
       .toMap
 
-  private lazy val junitSymbols: Map[String, TestFramework] = Set(
-    JunitTestFinder.junitBaseClassSymbol,
-    JunitTestFinder.junitAnnotationSymbol,
-  ).map(_ -> TestFramework.JUnit).toMap
+  private lazy val junitSymbols: Map[String, TestFramework] =
+    JunitTestFinder.junitAnnotationSymbols.map(_ -> TestFramework.JUnit).toMap
 
   private lazy val testngSymbols: Map[String, TestFramework] = {
     val testngFinder = new TestNGTestFinder()

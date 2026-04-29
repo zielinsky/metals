@@ -138,7 +138,7 @@ class CompletionMemberSelectSuite extends BaseJavaCompletionSuite {
        |notify()
        |notifyAll()
        |wait()
-       |wait(long timeoutMillis)
+       |wait(long arg0)
        |wait(long timeoutMillis, int nanos)
        |finalize()
        |""".stripMargin,

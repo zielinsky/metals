@@ -5,7 +5,6 @@ object V {
 
   val scala211 = "2.11.12"
   val scala212 = "2.12.21"
-  
 
   val scala213 = "2.13.18"
 
@@ -17,7 +16,7 @@ object V {
 
   // When you can add to removedScalaVersions in MtagsResolver.scala with the last released version
   val sbtScala = "2.12.21"
-  
+
   val sbtMill = "2.13.15"
 
   // Rules need to be manually updated to support
@@ -50,7 +49,7 @@ object V {
   val javaSemanticdb = "0.11.1"
 
   val jsoup = "1.21.2"
-  
+
   val kindProjector = "0.13.4"
 
   val lsp4jV = "0.24.0"
@@ -60,7 +59,7 @@ object V {
   val mill = "1.0.6"
 
   val mdoc = "2.7.2"
-  
+
   val munit = "1.2.3"
 
   val pprint = "0.7.3"
@@ -74,7 +73,7 @@ object V {
   val scalafix = "0.14.4"
 
   val scalafmt = "3.7.15"
-  
+
   val scalameta = "4.14.4"
 
   val scribe = "3.17.0"

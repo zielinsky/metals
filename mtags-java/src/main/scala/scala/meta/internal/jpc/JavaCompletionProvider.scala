@@ -149,10 +149,16 @@ class JavaCompletionProvider(
 
     memberType match {
       case dt: DeclaredType =>
-        completeDeclaredTypeMembers(task, dt, path, isSuperAccess, isStaticContext)
+        completeDeclaredTypeMembers(
+          task,
+          dt,
+          path,
+          isSuperAccess,
+          isStaticContext
+        )
       case _: ArrayType => completeArrayType()
       case tv: TypeVariable => completeTypeVariable(task, tv, path)
-      case pkg: PackageType => 
+      case pkg: PackageType =>
         completePackageType(task, pkg)
       case _ => Nil
     }
@@ -320,7 +326,7 @@ class JavaCompletionProvider(
         )
         val isAllowedKind = !bannedKinds(member.getKind())
         val isStaticMember = member.getModifiers.contains(Modifier.STATIC)
-        val isAccessible = 
+        val isAccessible =
           trees.isAccessible(scope, member, declaredType) ||
             superAccessType.exists(trees.isAccessible(scope, member, _))
 

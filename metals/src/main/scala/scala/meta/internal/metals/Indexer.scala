@@ -33,7 +33,6 @@ import scala.meta.io.AbsolutePath
 import scala.meta.metals.MetalsLanguageServer
 
 import ch.epfl.scala.{bsp4j => b}
-import com.google.gson.JsonObject
 import org.eclipse.lsp4j.Position
 import org.eclipse.{lsp4j => l}
 
@@ -251,8 +250,8 @@ case class Indexer(indexProviders: IndexProviders, mbtBuild: () => MbtBuild)(
           s"indexing ${buildTool.importedBuild.dependencyModules.getItems().size()} dependencies"
         if (indexProviders.userConfig.definitionIndexStrategy.isClasspath) {
           usedJars ++= indexDependencyModules(
-            buildTool.data,
             buildTool.importedBuild.dependencyModules,
+            progress,
           )
         }
         if (shouldFallbackToFileMbt) {
@@ -481,7 +480,8 @@ case class Indexer(indexProviders: IndexProviders, mbtBuild: () => MbtBuild)(
   private def indexDependencyModules(
       dependencyModules: b.DependencyModulesResult,
       progress: TaskProgress,
-  ): Unit = {
+  ): Set[AbsolutePath] = {
+    val usedJars = mutable.HashSet.empty[AbsolutePath]
     val isVisited = new ju.HashSet[AbsolutePath]()
     for {
       item <- dependencyModules.getItems.asScala
@@ -494,6 +494,7 @@ case class Indexer(indexProviders: IndexProviders, mbtBuild: () => MbtBuild)(
     } {
       progress.progress = progress.progress + 1
       isVisited.add(jar)
+      usedJars += jar
       val sources = maven.getArtifacts().asScala.collectFirst {
         case a if a.getClassifier() == "sources" =>
           a.getUri().asURItoAbsolutePath
@@ -515,6 +516,7 @@ case class Indexer(indexProviders: IndexProviders, mbtBuild: () => MbtBuild)(
         .getOrElse(Scala213)
       definitionIndex.addDependencyModule(dependencyModule, dialect)
     }
+    usedJars.toSet
   }
 
   private def processDependencyPath(
@@ -526,77 +528,32 @@ case class Indexer(indexProviders: IndexProviders, mbtBuild: () => MbtBuild)(
     var cacheHits = 0
     var cacheMisses = 0
     try {
-        if (path.isJar && path.exists) {
-          if (!indexProviders.userConfig.definitionIndexStrategy.isClasspath) {
-            usedJars += path
-            if (addSourceJarSymbols(path)) cacheHits += 1
-            else cacheMisses += 1
-          }
-        } else if (path.isDirectory) {
-          val dialect = buildTargets
-            .scalaTarget(target)
-            .map(scalaTarget =>
-              ScalaVersions.dialectForScalaVersion(
-                scalaTarget.scalaVersion,
-                includeSource3 = true,
-              )
-            )
-            .getOrElse(Scala213)
-
-          definitionIndex.addSourceDirectory(path, dialect)
-        } else {
-          scribe.warn(s"unexpected dependency: $path")
+      if (path.isJar && path.exists) {
+        if (!indexProviders.userConfig.definitionIndexStrategy.isClasspath) {
+          usedJars += path
+          if (addSourceJarSymbols(path)) cacheHits += 1
+          else cacheMisses += 1
         }
-      } catch {
-        case NonFatal(e) =>
-          scribe.error(s"error processing $sourceUri", e)
-      }
-    (cacheHits, cacheMisses)
-  }
+      } else if (path.isDirectory) {
+        val dialect = buildTargets
+          .scalaTarget(target)
+          .map(scalaTarget =>
+            ScalaVersions.dialectForScalaVersion(
+              scalaTarget.scalaVersion,
+              includeSource3 = true,
+            )
+          )
+          .getOrElse(Scala213)
 
-  private def indexDependencyModules(
-      data: TargetData,
-      dependencyModules: b.DependencyModulesResult,
-  ): Set[AbsolutePath] = {
-    val usedJars = mutable.HashSet.empty[AbsolutePath]
-    val isVisited = new ju.HashSet[String]()
-
-    for {
-      item <- dependencyModules.getItems.asScala
-      module <- item.getModules.asScala
-      if module.getData != null
-      uri <- module.getData match {
-        case jsonObject: JsonObject =>
-          Option(jsonObject.get("artifacts")) match {
-            case Some(artifactsElement) if artifactsElement.isJsonArray =>
-              try {
-                artifactsElement.getAsJsonArray.asScala
-                  .filter(element =>
-                    element.isJsonObject &&
-                      element.getAsJsonObject.has("classifier")
-                  )
-                  .map(_.getAsJsonObject.get("uri").getAsString)
-                  .toList
-              } catch {
-                case NonFatal(e) =>
-                  scribe.warn(
-                    s"Error processing artifacts array: ${e.getMessage}"
-                  )
-                  Nil
-              }
-            case _ => Nil
-          }
-        case _ => Nil
+        definitionIndex.addSourceDirectory(path, dialect)
+      } else {
+        scribe.warn(s"unexpected dependency: $path")
       }
-      absolutePath = uri.toAbsolutePath
-      _ = data.addDependencySource(absolutePath, item.getTarget)
-      if !isVisited.contains(uri)
-    } {
-      isVisited.add(uri)
-      processDependencyPath(absolutePath, item.getTarget, usedJars, uri)
+    } catch {
+      case NonFatal(e) =>
+        scribe.error(s"error processing $sourceUri", e)
     }
-
-    usedJars.toSet
+    (cacheHits, cacheMisses)
   }
 
   private def indexDependencySources(
@@ -609,7 +566,7 @@ case class Indexer(indexProviders: IndexProviders, mbtBuild: () => MbtBuild)(
     // that are not used
     val usedJars = mutable.HashSet.empty[AbsolutePath]
     val isVisited = new ju.HashSet[String]()
-    
+
     val result = for {
       item <- dependencySources.getItems.asScala
       sourceUri <- Option(item.getSources).toList.flatMap(_.asScala)
@@ -621,8 +578,9 @@ case class Indexer(indexProviders: IndexProviders, mbtBuild: () => MbtBuild)(
       isVisited.add(sourceUri)
       processDependencyPath(path, item.getTarget, usedJars, sourceUri)
     }
-    val (cacheHits, cacheMisses) = result.foldLeft((0, 0)) { case ((cacheHits, cacheMisses), (cacheHit, cacheMiss)) =>
-      (cacheHits + cacheHit, cacheMisses + cacheMiss)
+    val (cacheHits, cacheMisses) = result.foldLeft((0, 0)) {
+      case ((cacheHits, cacheMisses), (cacheHit, cacheMiss)) =>
+        (cacheHits + cacheHit, cacheMisses + cacheMiss)
     }
     metrics.recordEvent(
       new Event()
@@ -840,7 +798,7 @@ case class Indexer(indexProviders: IndexProviders, mbtBuild: () => MbtBuild)(
             scribe.debug(s"Indexing source jar $path")
             val (_, overrides, toplevelMembers) =
               indexJar(path, dialect, reindex = true)
-            
+
             tables.jarSymbols.addTypeHierarchyInfo(path, overrides)
             if (toplevelMembers.nonEmpty) {
               tables.jarSymbols.addToplevelMembersInfo(path, toplevelMembers)

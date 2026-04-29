@@ -64,6 +64,18 @@ class BuildToolProvider(
     }
   }
 
+  /**
+   * Loads a build tool if there is only one build tool in the workspace.
+   * Can be used to fix mismatched settings in the database.
+   */
+  def loadSingleBuildTool(): Future[Option[BuildTool]] = {
+    buildTools.loadSupported() match {
+      case tool :: Nil =>
+        Future(Some(tool))
+      case _ => Future(None)
+    }
+  }
+
   def supportedBuildTool(): Future[Option[BuildTool.Found]] = {
     buildTools.loadSupported() match {
       case Nil => {

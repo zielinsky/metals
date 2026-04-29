@@ -64,7 +64,8 @@ abstract class BaseToplevelSuite extends BaseSuite {
               }
             }
             symbols ++ types
-          case Toplevel => Mtags.testingSingleton.topLevelSymbols(input, dialect)
+          case Toplevel =>
+            Mtags.testingSingleton.topLevelSymbols(input, dialect)
         }
       input.delete()
       dir.delete()
