@@ -1,5 +1,6 @@
 package tests
 
+import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -7,7 +8,6 @@ import scala.sys.process
 
 import scala.meta.internal.metals.MetalsEnrichments.XtensionAbsolutePathBuffers
 import scala.meta.io.AbsolutePath
-import java.nio.file.FileSystemException
 
 class TemporaryDirectoryFixture extends munit.Fixture[AbsolutePath]("tmp-dir") {
   private var p: Path = null
@@ -18,11 +18,11 @@ class TemporaryDirectoryFixture extends munit.Fixture[AbsolutePath]("tmp-dir") {
   }
   override def afterEach(context: munit.AfterEach): Unit = {
     try {
-    AbsolutePath(p).deleteRecursively()
+      AbsolutePath(p).deleteRecursively()
     } catch {
       case fs: FileSystemException =>
         scribe.warn("Could not delete directory due to exception", fs)
-        
+
     }
   }
 

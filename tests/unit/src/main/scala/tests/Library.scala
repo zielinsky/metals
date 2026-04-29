@@ -34,9 +34,11 @@ case class Library(
       version = jar.toNIO.getParent().getFileName().toString()
       name = jar.toNIO.getParent().getParent().getFileName().toString()
       org = jar.toNIO.getParent.getParent.getParent
+        .toUri()
         .toString()
         .split("maven2/", 2)(1)
         .replace("/", ".")
+        .stripSuffix(".")
       coordinates = mtags.MavenCoordinates(org, name, version)
     } yield mtags.DependencyModule(coordinates, jar, sources)
   }

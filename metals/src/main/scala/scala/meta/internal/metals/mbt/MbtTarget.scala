@@ -104,7 +104,7 @@ case class MbtTarget(
       id,
       compilerOptions.asJava,
       classpath,
-      emptyClassDirectory(workspace).toString(),
+      emptyClassDirectory(workspace).toURI.toString(),
     )
 
   def javacOptionsItem(workspace: AbsolutePath): bsp4j.JavacOptionsItem =
@@ -112,7 +112,7 @@ case class MbtTarget(
       id,
       compilerOptions.asJava,
       classpath,
-      emptyClassDirectory(workspace).toString(),
+      emptyClassDirectory(workspace).toURI.toString(),
     )
 
   def sourcesItem(
