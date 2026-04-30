@@ -3,6 +3,7 @@ package tests.mbt
 import java.nio.file.Files
 
 import scala.jdk.CollectionConverters._
+import scala.util.Properties
 
 import scala.meta.internal.metals.AutoImportBuildKind
 import scala.meta.internal.metals.Configs.FallbackSourcepathConfig
@@ -17,7 +18,6 @@ import tests.BaseCompletionLspSuite
 import tests.BuildInfo
 import tests.Library
 import tests.TestHovers
-import scala.util.Properties
 
 /**
  * End-to-end checks for `.metals/mbt.json` with the built-in MBT BSP server:

@@ -1,6 +1,7 @@
 package scala.meta.internal.metals.mbt
 
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.{util => ju}
 
 import scala.util.Properties
@@ -11,7 +12,6 @@ import scala.meta.internal.metals.ScalaVersions
 import scala.meta.io.AbsolutePath
 
 import ch.epfl.scala.bsp4j
-import java.nio.file.Paths
 
 case class MbtTarget(
     name: String,
