@@ -7,6 +7,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
 import scala.util.Properties
 
+import scala.meta.internal.metals.BaseWorkDoneProgress
 import scala.meta.internal.metals.Cancelable
 import scala.meta.internal.metals.CancelableFuture
 import scala.meta.internal.metals.Embedded
@@ -16,7 +17,6 @@ import scala.meta.internal.metals.MutableCancelable
 import scala.meta.internal.metals.Time
 import scala.meta.internal.metals.Timer
 import scala.meta.internal.metals.UserConfiguration
-import scala.meta.internal.metals.WorkDoneProgress
 import scala.meta.internal.process.ExitCodes
 import scala.meta.internal.process.SystemProcess
 import scala.meta.io.AbsolutePath
@@ -25,7 +25,7 @@ import coursierapi._
 
 class ShellRunner(
     time: Time,
-    workDoneProvider: WorkDoneProgress,
+    workDoneProvider: BaseWorkDoneProgress,
     userConfiguration: () => UserConfiguration,
 )(implicit
     executionContext: scala.concurrent.ExecutionContext
@@ -98,7 +98,7 @@ class ShellRunner(
       case Some(shell) => List(shell, "-i", "-l", "-c", args.mkString(" "))
       case None => args
     }
-
+    scribe.info(s"Running command: ${shellArguments.mkString(" ")}")
     val ps = SystemProcess.run(
       shellArguments,
       directory,

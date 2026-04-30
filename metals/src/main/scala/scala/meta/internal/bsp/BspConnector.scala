@@ -93,6 +93,7 @@ class BspConnector(
       userConfiguration: () => UserConfiguration,
       shellRunner: ShellRunner,
       progress: TaskProgress,
+      allowRegenerateBspConfig: Boolean,
   )(implicit ec: ExecutionContext): Future[Option[BspSession]] = {
     buildTool.foreach(bt =>
       progress.message = s"connecting to ${bt.buildServerName}"
@@ -187,7 +188,7 @@ class BspConnector(
                 if bsp.shouldRegenerateBspJson(
                   details.getVersion(),
                   workspace,
-                ) && !regeneratedConfig =>
+                ) && !regeneratedConfig && allowRegenerateBspConfig =>
               scribe.info(
                 s"Regenerating ${details.getName()} json config to latest."
               )

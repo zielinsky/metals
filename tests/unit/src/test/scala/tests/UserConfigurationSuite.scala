@@ -582,4 +582,5 @@ class UserConfigurationSuite extends BaseSuite {
       )
     )
   }
+
 }

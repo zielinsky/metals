@@ -148,6 +148,17 @@ abstract class BaseLspSuite(
     Process(command, cwd = workspace.toFile).!!
   }
 
+  private def configureLocalGitUser(workspace: AbsolutePath): Unit = {
+    Process(
+      List("git", "config", "user.name", "Metals Test"),
+      cwd = workspace.toFile,
+    ).!!
+    Process(
+      List("git", "config", "user.email", "metals@example.com"),
+      cwd = workspace.toFile,
+    ).!!
+  }
+
   def initialize(
       layout: String,
       expectError: Boolean = false,
@@ -156,6 +167,7 @@ abstract class BaseLspSuite(
     writeLayout(layout)
     if (initializeGitRepo) {
       execSilentCommand(List("git", "init", "-b", "main"))
+      configureLocalGitUser(workspace)
       execSilentCommand(List("git", "add", "."))
       execSilentCommand(
         List("git", "commit", "--no-gpg-sign", "--no-verify", "-m",

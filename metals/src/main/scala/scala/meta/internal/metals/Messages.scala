@@ -225,6 +225,31 @@ object Messages {
     }
   }
 
+  object BazelMbtNamespaceChoice {
+    def workspace: MessageActionItem =
+      new MessageActionItem("Single global target")
+    def packages: MessageActionItem =
+      new MessageActionItem("Each build target")
+
+    def params(): ShowMessageRequestParams = {
+      val params = new ShowMessageRequestParams()
+      params.setMessage(
+        "How should Metals group Bazel targets in the MBT build?"
+      )
+      params.setType(MessageType.Info)
+      params.setActions(List(packages, workspace).asJava)
+      params
+    }
+
+    def selectedMode(
+        item: MessageActionItem
+    ): Option[mbt.importer.BazelMbtNamespaceMode] =
+      if (item == workspace) Some(mbt.importer.BazelMbtNamespaceMode.Workspace)
+      else if (item == packages)
+        Some(mbt.importer.BazelMbtNamespaceMode.BuildFile)
+      else None
+  }
+
   object StartHttpServer {
     def yes = new MessageActionItem("Start")
 

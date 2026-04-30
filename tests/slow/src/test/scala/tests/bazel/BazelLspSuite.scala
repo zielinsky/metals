@@ -1,5 +1,6 @@
 package tests.bazel
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Promise
 
 import scala.meta.internal.builds.BazelBuildTool
@@ -7,6 +8,7 @@ import scala.meta.internal.builds.BazelDigest
 import scala.meta.internal.builds.ShellRunner
 import scala.meta.internal.metals.DecoderResponse
 import scala.meta.internal.metals.Directories
+import scala.meta.internal.metals.EmptyWorkDoneProgress
 import scala.meta.internal.metals.FileDecoderProvider
 import scala.meta.internal.metals.Messages
 import scala.meta.internal.metals.Messages._
@@ -34,7 +36,12 @@ import tests.BazelServerInitializer
 @munit.IgnoreSuite
 class BazelLspSuite
     extends BaseImportSuite("bazel-import", BazelServerInitializer) {
-  val buildTool: BazelBuildTool = BazelBuildTool(() => userConfig, workspace)
+  val buildTool: BazelBuildTool = BazelBuildTool(
+    () => userConfig,
+    workspace,
+    new ShellRunner(Time.system, EmptyWorkDoneProgress, () => userConfig),
+    ExecutionContext.global,
+  )
 
   val bazelVersion = "6.4.0"
 

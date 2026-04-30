@@ -13,8 +13,12 @@ import scala.meta.internal.bsp.ScalaCliBspScope
 import scala.meta.internal.io.PathIO
 import scala.meta.internal.metals.BloopServers
 import scala.meta.internal.metals.Directories
+import scala.meta.internal.metals.EmptyWorkDoneProgress
 import scala.meta.internal.metals.MetalsEnrichments._
+import scala.meta.internal.metals.Tables
+import scala.meta.internal.metals.Time
 import scala.meta.internal.metals.UserConfiguration
+import scala.meta.internal.metals.clients.language.MetalsLanguageClient
 import scala.meta.internal.metals.mbt.importer.MbtImportProvider
 import scala.meta.internal.metals.mbt.importer.ScriptMbtImporter
 import scala.meta.internal.metals.scalacli.ScalaCli
@@ -40,6 +44,8 @@ final class BuildTools(
     userConfig: () => UserConfiguration,
     explicitChoiceMade: () => Boolean,
     charset: Charset,
+    shellRunner: ShellRunner,
+    ec: ExecutionContext,
 ) {
   private val lastDetectedBuildTools = new AtomicReference(
     Map.empty[String, BuildTool]
@@ -218,7 +224,7 @@ final class BuildTools(
       MavenBuildTool(userConfig, workspace),
       MillBuildTool(userConfig, workspace),
       ScalaCliBuildTool(workspace, workspace, userConfig),
-      BazelBuildTool(userConfig, workspace),
+      BazelBuildTool(userConfig, workspace, shellRunner, ec),
     )
   }
 
@@ -237,7 +243,10 @@ final class BuildTools(
     all.isEmpty
   }
 
-  def loadSupported(): List[BuildTool] = {
+  def loadSupported(
+      languageClient: Option[MetalsLanguageClient] = None,
+      tables: Option[Tables] = None,
+  ): List[BuildTool] = {
     val buf = List.newBuilder[BuildTool]
 
     sbtProject.foreach(buf += SbtBuildTool(_, userConfig))
@@ -245,7 +254,16 @@ final class BuildTools(
     mavenProject.foreach(buf += MavenBuildTool(userConfig, _))
     millProject.foreach(buf += MillBuildTool(userConfig, _))
     scalaCliProject.foreach(buf += ScalaCliBuildTool(workspace, _, userConfig))
-    bazelProject.foreach(buf += BazelBuildTool(userConfig, _))
+    bazelProject.foreach { root =>
+      buf += BazelBuildTool(
+        userConfig,
+        root,
+        shellRunner,
+        ec,
+        languageClient,
+        tables,
+      )
+    }
     buf.addAll(customBsps)
 
     buf.result()
@@ -290,9 +308,13 @@ final class BuildTools(
   def mbtImporters(
       shellRunner: ShellRunner,
       userConfig: () => UserConfiguration,
+      languageClient: Option[MetalsLanguageClient],
+      tables: Option[Tables],
   )(implicit ec: ExecutionContext): List[MbtImportProvider] = {
     val buf = List.newBuilder[MbtImportProvider]
-    buf ++= loadSupported().collect { case p: MbtImportProvider => p }
+    buf ++= loadSupported(languageClient, tables).collect {
+      case p: MbtImportProvider => p
+    }
     workspace.list
       .filter(f =>
         ScriptMbtImporter.scriptExtensions.exists(f.filename.endsWith(_))
@@ -336,5 +358,11 @@ object BuildTools {
       () => UserConfiguration(),
       explicitChoiceMade = () => false,
       charset = StandardCharsets.UTF_8,
+      shellRunner = new ShellRunner(
+        Time.system,
+        EmptyWorkDoneProgress,
+        () => UserConfiguration(),
+      )(ExecutionContext.global),
+      ec = ExecutionContext.global,
     )
 }

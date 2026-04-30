@@ -172,12 +172,21 @@ class ConnectionProvider(
    * - Otherwise → normal slow-connect path (BloopInstall / BSP prompts).
    */
   private def connectBuildServer(progress: TaskProgress): Future[Unit] = {
-    val mbtImporters = buildTools.mbtImporters(shellRunner, () => userConfig)
+    val mbtImporters = buildTools.mbtImporters(
+      shellRunner,
+      () => userConfig,
+      Some(languageClient),
+      Some(tables),
+    )
     if (isMbtPreferred) {
       for {
         _ <- runMbtReimport(mbtImporters)
         _ <-
-          if (bspSession.isEmpty) connect(CreateSession(), progress).ignoreValue
+          if (bspSession.isEmpty)
+            connect(
+              CreateSession(regenerateBspConfig = false),
+              progress,
+            ).ignoreValue
           else Future.unit
       } yield ()
     } else if (buildTools.isAutoConnectable(buildToolProvider.optProjectRoot)) {
@@ -257,7 +266,12 @@ class ConnectionProvider(
       forceImport: Boolean,
       progress: TaskProgress,
   ): Future[BuildChange] = {
-    def mbtImporters = buildTools.mbtImporters(shellRunner, () => userConfig)
+    def mbtImporters = buildTools.mbtImporters(
+      shellRunner,
+      () => userConfig,
+      Some(languageClient),
+      Some(tables),
+    )
     if (isMbtPreferred && mbtImporters.nonEmpty) {
       val runImport =
         if (forceImport) forceMbtReimport(mbtImporters)
@@ -541,8 +555,12 @@ class ConnectionProvider(
                 importBuildAndIndex(session, progress)
               case ConnectToSession(session) =>
                 connectToSession(session, progress)
-              case CreateSession(shutdownBuildServer) =>
-                createSession(shutdownBuildServer, progress)
+              case CreateSession(shutdownBuildServer, regenerateBspConfig) =>
+                createSession(
+                  shutdownBuildServer,
+                  regenerateBspConfig,
+                  progress,
+                )
               case GenerateBspConfigAndConnect(buildTool, shutdownServer) =>
                 generateBspConfigAndConnect(
                   buildTool,
@@ -654,11 +672,24 @@ class ConnectionProvider(
         }
         _ = compilers.cancel()
         buildChange <- index(check, progress)
+        _ <- refreshMbtTurbineClasspath(session).withInterrupt
       } yield {
         syncStatusReporter.importFinished(focusedDocument.map(_.toURI.toString))
         buildChange
       }
     }
+
+    private def refreshMbtTurbineClasspath(
+        session: BspSession
+    ): Future[Unit] =
+      if (
+        MbtBuildServer.isMbtServer(session.main.name) &&
+        userConfig.javaSymbolLoader.isTurbineClasspath
+      ) {
+        mbtSymbolSearch.recompileTurbineClasspath()
+      } else {
+        Future.unit
+      }
 
     private def saveProjectReferencesInfo(
         bspBuilds: List[BspSession.BspBuild]
@@ -738,6 +769,7 @@ class ConnectionProvider(
 
     def createSession(
         shutdownServer: Boolean,
+        regenerateBspConfig: Boolean,
         progress: TaskProgress,
     )(implicit cancelSwitch: CancelSwitch): Interruptable[BuildChange] = {
       def compileAllOpenFiles: BuildChange => Future[BuildChange] = {
@@ -786,6 +818,7 @@ class ConnectionProvider(
                 () => userConfig,
                 shellRunner,
                 progress,
+                regenerateBspConfig,
               )
             }
           }
@@ -852,7 +885,8 @@ class ConnectionProvider(
           .withInterrupt
         shouldConnect = handleGenerationStatus(buildTool, status)
         status <-
-          if (shouldConnect) createSession(false, progress)
+          if (shouldConnect)
+            createSession(false, regenerateBspConfig = true, progress)
           else Interruptable.successful(BuildChange.Failed)
       } yield status
     }
@@ -900,7 +934,11 @@ class ConnectionProvider(
         result <- bloopInstall.run(buildTool).withInterrupt
         change <- {
           if (result.isInstalled)
-            createSession(shutdownServer = false, progress)
+            createSession(
+              shutdownServer = false,
+              regenerateBspConfig = true,
+              progress,
+            )
           else if (result.isFailed) {
             for {
               change <-
@@ -936,7 +974,11 @@ class ConnectionProvider(
                   // Connect nevertheless, many build import failures are caused
                   // by resolution errors in one weird module while other modules
                   // exported successfully.
-                  createSession(shutdownServer = false, progress)
+                  createSession(
+                    shutdownServer = false,
+                    regenerateBspConfig = true,
+                    progress,
+                  )
                 } else {
                   buildTool match {
                     case _: BuildServerProvider =>
@@ -982,7 +1024,12 @@ class ConnectionProvider(
                         mbtImport
                           .runUnconditionally(
                             buildTools
-                              .mbtImporters(shellRunner, () => userConfig),
+                              .mbtImporters(
+                                shellRunner,
+                                () => userConfig,
+                                Some(languageClient),
+                                Some(tables),
+                              ),
                             isMbtImportInProcess,
                           )
                       } else Future.successful(WorkspaceLoadedStatus.Installed)
@@ -1064,12 +1111,15 @@ case class ConnectToSession(bspSession: BspSession)
 
   def show: String = s"connect to session for ${bspSession.main.name}"
 }
-case class CreateSession(shutdownBuildServer: Boolean = false)
-    extends ConnectRequest("Establishing build server session") {
+case class CreateSession(
+    shutdownBuildServer: Boolean = false,
+    regenerateBspConfig: Boolean = true,
+) extends ConnectRequest("Establishing build server session") {
   def cancelCompare(other: ConnectRequest): ConflictBehaviour =
     other match {
       case (_: Disconnect) | (_: Index) | (_: ConnectToSession) | CreateSession(
-            false
+            false,
+            _,
           ) =>
         TakeOver
       case _ => Yield
