@@ -16,7 +16,7 @@ case class InputFile(
 ) {
   def sourceDirectoryRelativePath: RelativePath =
     file.toRelative(sourceDirectory)
-  def input: Input.VirtualFile = Input.VirtualFile(file.toString, code)
+  def input: Input.VirtualFile = Input.VirtualFile(file.toURI.toString, code)
   def isScala: Boolean = PathIO.extension(file.toNIO) == "scala"
   def isJava: Boolean = PathIO.extension(file.toNIO) == "java"
   def isScalaOrJava: Boolean = isScala || isJava

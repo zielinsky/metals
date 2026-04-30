@@ -21,11 +21,10 @@ object JavacDiagnostic {
       code == "compiler.err.cant.apply.symbol"
   }
   object CannotFindSymbol {
-    private val WithLocation = """cannot find symbol(?m)
-  symbol:\s+([^ ]+)\s+(.*)(?m)
-  location:\s+(.*)""".r
-    private val WithoutLocation = """cannot find symbol(?m)
-  symbol:\s+([^ ]+)\s+(.*)""".r
+    private val WithLocation =
+      """cannot find symbol(?m)\s+symbol:\s+([^ ]+)\s+(.*)(?m)\s+location:\s+(.*)""".r
+    private val WithoutLocation =
+      """cannot find symbol(?m)\s+symbol:\s+([^ ]+)\s+(.*)""".r
     def unapply(d: l.Diagnostic): Option[CannotFindSymbol] =
       d.getMessage().trim() match {
         case WithLocation(kind, symbol, location) if d.getCode().isLeft() =>

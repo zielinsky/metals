@@ -19,11 +19,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/main-v2') && fromJson('["ubuntu-latest", "windows-latest"]') || fromJson('["ubuntu-latest"]') }}
         java: ["17"]
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
         shardCount: [8]
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: coursier/setup-action@v1
@@ -52,16 +52,16 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()  # This ensures the step runs even if previous steps fail
         with:
-          name: heap-dumps
+          name: heap-dumps-${{ matrix.os }}-${{ matrix.shard }}
           path: |
             ./**/*.hprof
-          retention-days: 5  # Adjust as needed
+          retention-days: 5
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: test-reports-${{ matrix.os }}-${{ matrix.shard }}
           path: "**/.reports/**/*"
           if-no-files-found: ignore
           retention-days: 7

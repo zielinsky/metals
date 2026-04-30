@@ -1,5 +1,6 @@
 package tests
 
+import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -16,7 +17,12 @@ class TemporaryDirectoryFixture extends munit.Fixture[AbsolutePath]("tmp-dir") {
     p = Files.createTempDirectory(name)
   }
   override def afterEach(context: munit.AfterEach): Unit = {
-    AbsolutePath(p).deleteRecursively()
+    try {
+      AbsolutePath(p).deleteRecursively()
+    } catch {
+      case _: FileSystemException =>
+        scribe.warn("Could not delete directory due to exception")
+    }
   }
 
   def gitCommitAllChanges(message: String = "Commit all changes"): Unit = {

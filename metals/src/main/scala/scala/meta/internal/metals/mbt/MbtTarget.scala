@@ -1,6 +1,7 @@
 package scala.meta.internal.metals.mbt
 
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.{util => ju}
 
 import scala.util.Properties
@@ -80,8 +81,9 @@ case class MbtTarget(
       ju.Collections.emptyList(),
     )
     val jvmBt = new bsp4j.JvmBuildTarget()
+    val javaPath = Paths.get(javaHome.getOrElse(Properties.javaHome))
     jvmBt.setJavaHome(
-      javaHome.getOrElse(Properties.javaHome)
+      javaPath.toUri().toString()
     )
     scalaTarget.setJvmBuildTarget(jvmBt)
 
@@ -104,7 +106,7 @@ case class MbtTarget(
       id,
       compilerOptions.asJava,
       classpath,
-      emptyClassDirectory(workspace).toString(),
+      emptyClassDirectory(workspace).toURI.toString(),
     )
 
   def javacOptionsItem(workspace: AbsolutePath): bsp4j.JavacOptionsItem =
@@ -112,7 +114,7 @@ case class MbtTarget(
       id,
       compilerOptions.asJava,
       classpath,
-      emptyClassDirectory(workspace).toString(),
+      emptyClassDirectory(workspace).toURI.toString(),
     )
 
   def sourcesItem(
