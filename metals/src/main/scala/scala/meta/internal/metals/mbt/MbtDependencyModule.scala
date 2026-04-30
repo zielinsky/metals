@@ -6,18 +6,20 @@ import java.nio.file.Paths
 import java.util.ArrayList
 import javax.annotation.Nullable
 
+import scala.util.control.NonFatal
+
 import ch.epfl.scala.bsp4j
 
 case class MbtDependencyModule(
     @Nullable id: String, // e.g. "com.google.guava:guava:30.0-jre"
-    @Nullable jar: String,
-    @Nullable sources: String,
+    @Nullable jar: String, // URI string, e.g. "file:///path/to/jar.jar"
+    @Nullable sources: String, // URI string, e.g. "file:///path/to/jar-sources.jar"
 ) {
-  def jarPath: Option[Path] = Option(jar).map(Paths.get(_))
-  def jarUri: Option[URI] = jarPath.map(_.toUri())
-  def jarUriString: Option[String] = jarUri.map(_.toString)
-  def sourcesUri: Option[URI] = Option(sources).map(Paths.get(_).toUri)
-  def sourcesUriString: Option[String] = sourcesUri.map(_.toString)
+
+  def jarUri: Option[URI] = Option(jar).map(MbtDependencyModule.parseUri)
+  def jarPath: Option[Path] = jarUri.map(Paths.get)
+  def sourcesURI: Option[URI] =
+    Option(sources).map(MbtDependencyModule.parseUri)
   private def idParts: Array[String] = id.split(":", 3)
   def isValid: Boolean = idParts.length == 3
   def organization: String =
@@ -30,11 +32,11 @@ case class MbtDependencyModule(
   def asBsp: bsp4j.DependencyModule = {
     val module = new bsp4j.DependencyModule(id, version)
     val artifacts = new ArrayList[bsp4j.MavenDependencyModuleArtifact]()
-    jarUriString.foreach { jarUri =>
-      artifacts.add(new bsp4j.MavenDependencyModuleArtifact(jarUri))
+    jarUri.foreach { jarUri =>
+      artifacts.add(new bsp4j.MavenDependencyModuleArtifact(jarUri.toString))
     }
-    sourcesUriString.foreach { sourceUri =>
-      val source = new bsp4j.MavenDependencyModuleArtifact(sourceUri)
+    sourcesURI.foreach { sourceUri =>
+      val source = new bsp4j.MavenDependencyModuleArtifact(sourceUri.toString)
       source.setClassifier("sources")
       artifacts.add(source)
     }
@@ -49,4 +51,18 @@ case class MbtDependencyModule(
     )
     module
   }
+}
+
+object MbtDependencyModule {
+
+  /**
+   * Parse a string that should be a URI but may accidentally be a file path.
+   */
+  def parseUri(value: String): URI = try {
+    URI.create(value)
+  } catch {
+    case NonFatal(_) =>
+      Paths.get(value).toUri
+  }
+
 }

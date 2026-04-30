@@ -51,7 +51,7 @@ class MbtBuildServerLspSuite
       cleanWorkspace()
       val scalaBinary =
         BuildInfo.scalaVersion.split("\\.").take(2).mkString(".")
-      val xmlJar = Fetch
+      val xmlJarUri = Fetch
         .create()
         .withMainArtifacts()
         .withDependencies(
@@ -61,14 +61,14 @@ class MbtBuildServerLspSuite
         )
         .fetch()
         .asScala
-        .map(_.toPath)
+        .map(_.toPath.toUri.toString)
         .head
       val mbtJson =
         s"""|{
             |  "dependencyModules": [
             |    {
             |      "id": "org.scala-lang.modules:scala-xml_$scalaBinary:2.3.0",
-            |      "jar": "$xmlJar"
+            |      "jar": "$xmlJarUri"
             |    }
             |  ],
             |  "namespaces": {
@@ -122,18 +122,18 @@ class MbtBuildServerLspSuite
 
   test("two-targets-hover-definition-completion") {
     cleanWorkspace()
-    val scalaLibJar =
+    val scalaLibJarUri =
       Library
         .getScalaLibraryJarPath(BuildInfo.scalaVersion)
-        .toString()
-        .replace("\\", "\\\\")
+        .toURI
+        .toString
 
     val mbtJson =
       s"""{
          |  "dependencyModules": [
          |    {
          |      "id": "org.scala-lang:scala-library:${BuildInfo.scalaVersion}",
-         |      "jar": "$scalaLibJar"
+         |      "jar": "$scalaLibJarUri"
          |    }
          |  ],
          |  "namespaces": {
