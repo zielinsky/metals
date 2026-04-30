@@ -212,7 +212,7 @@ abstract class MetalsLspService(
 
   def containsJar(path: AbsolutePath): Boolean = {
     buildTargets.inverseSources(path).nonEmpty ||
-    mbtBuild.getDependencyModules.asScala.exists(_.jarPath.equals(path))
+    mbtBuild.getDependencyModules.asScala.exists(_.jarPath.contains(path))
   }
 
   val fileChanges: FileChanges =

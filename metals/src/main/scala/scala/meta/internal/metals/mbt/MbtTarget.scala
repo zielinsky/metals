@@ -31,7 +31,7 @@ case class MbtTarget(
   }
 
   private def classpath: ju.List[String] =
-    dependencyModules.flatMap(_.jarUriString).asJava
+    dependencyModules.flatMap(_.jarUri.map(_.toString)).asJava
 
   private def baseDirectory(workspace: AbsolutePath): AbsolutePath =
     workspace
@@ -136,7 +136,7 @@ case class MbtTarget(
   def dependencySourcesItem: bsp4j.DependencySourcesItem =
     new bsp4j.DependencySourcesItem(
       id,
-      dependencyModules.flatMap(_.sourcesUriString).distinct.asJava,
+      dependencyModules.flatMap(_.sourcesURI.map(_.toString)).distinct.asJava,
     )
 
   def dependencyModulesItem: bsp4j.DependencyModulesItem =

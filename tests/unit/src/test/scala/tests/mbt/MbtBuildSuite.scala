@@ -21,15 +21,16 @@ class MbtBuildSuite extends tests.BaseSuite {
   test("legacy-flat-format") {
     val dir = Files.createTempDirectory("mbt-legacy")
     val f = dir.resolve("mbt.json")
+    val jarUri = Paths.get("/tmp/scala-library.jar").toUri.toString
     val initialContent =
-      """{
-        |  "dependencyModules": [
-        |    {
-        |      "id": "org.scala-lang:scala-library:2.13.16",
-        |      "jar": "/tmp/scala-library.jar"
-        |    }
-        |  ]
-        |}""".stripMargin
+      s"""{
+         |  "dependencyModules": [
+         |    {
+         |      "id": "org.scala-lang:scala-library:2.13.16",
+         |      "jar": "$jarUri"
+         |    }
+         |  ]
+         |}""".stripMargin
     Files.writeString(
       f,
       initialContent,
@@ -53,41 +54,42 @@ class MbtBuildSuite extends tests.BaseSuite {
   test("namespaces-format") {
     val dir = Files.createTempDirectory("mbt-ns")
     val f = dir.resolve("mbt.json")
+    val jarUri = Paths.get("/tmp/scala-library.jar").toUri.toString
     val initialContent =
-      """|{
-         |  "dependencyModules": [
-         |    {
-         |      "id": "org.scala-lang:scala-library:2.13.16",
-         |      "jar": "/tmp/scala-library.jar"
-         |    }
-         |  ],
-         |  "namespaces": {
-         |    "core": {
-         |      "sources": [
-         |        "./src"
-         |      ],
-         |      "compilerOptions": [
-         |        "-release",
-         |        "11"
-         |      ],
-         |      "dependencyModules": [
-         |        "org.scala-lang:scala-library:2.13.16"
-         |      ]
-         |    },
-         |    "extra": {
-         |      "sources": [
-         |        "./src/**"
-         |      ],
-         |      "dependencyModules": [
-         |        "org.scala-lang:scala-library:2.13.16"
-         |      ],
-         |      "dependsOn": [
-         |        "core"
-         |      ]
-         |    }
-         |  }
-         |}
-         |""".stripMargin
+      s"""|{
+          |  "dependencyModules": [
+          |    {
+          |      "id": "org.scala-lang:scala-library:2.13.16",
+          |      "jar": "$jarUri"
+          |    }
+          |  ],
+          |  "namespaces": {
+          |    "core": {
+          |      "sources": [
+          |        "./src"
+          |      ],
+          |      "compilerOptions": [
+          |        "-release",
+          |        "11"
+          |      ],
+          |      "dependencyModules": [
+          |        "org.scala-lang:scala-library:2.13.16"
+          |      ]
+          |    },
+          |    "extra": {
+          |      "sources": [
+          |        "./src/**"
+          |      ],
+          |      "dependencyModules": [
+          |        "org.scala-lang:scala-library:2.13.16"
+          |      ],
+          |      "dependsOn": [
+          |        "core"
+          |      ]
+          |    }
+          |  }
+          |}
+          |""".stripMargin
     Files.writeString(
       f,
       initialContent,
