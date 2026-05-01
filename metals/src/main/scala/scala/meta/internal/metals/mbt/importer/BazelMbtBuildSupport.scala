@@ -38,7 +38,6 @@ object BazelMbtBuildSupport {
 
   private val workspaceNamespaceName: String = "bazel-workspace"
 
-  // TODO javac options
   def fromDiscovery(
       granularity: BazelMbtNamespaceMode,
       targetLabels: List[String],

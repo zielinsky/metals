@@ -74,6 +74,9 @@ final class MbtImport(
       .extract(workspace)
       .map { _ =>
         Try(MbtBuild.fromFile(provider.outputPath(workspace).toNIO)).toOption
+          .flatMap { build =>
+            if (build.isEmpty) None else Some(build)
+          }
       }
       .recover { case ex =>
         scribe.error(s"mbt-import: provider '${provider.name}' failed", ex)
