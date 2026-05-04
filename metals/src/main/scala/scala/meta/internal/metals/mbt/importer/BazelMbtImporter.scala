@@ -6,6 +6,7 @@ import java.nio.file.Path
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.xml.XML
+import scala.meta.internal.metals.MetalsServerConfig
 
 import scala.meta.internal.builds.BazelBuildTool
 import scala.meta.internal.builds.BazelDigest
@@ -50,7 +51,7 @@ abstract class BazelMbtImporter(
     for {
       outputBase <- queryOutputBase()
       dependencyModules <- BazelMavenExtractor
-        .extract(projectRoot, verbose = false, shellRunner, outputBase)
+        .extract(projectRoot, shellRunner, outputBase)
       targets <- runRuleTargetsQuery(patterns)
       _ = scribe.info(s"bazel-mbt: found ${targets.size} targets")
       srcs <- querySrcs(targets)
@@ -120,6 +121,7 @@ abstract class BazelMbtImporter(
 
   override def digest(workspace: AbsolutePath): Option[String] =
     BazelDigest.current(projectRoot)
+  BazelDigest.current(projectRoot)
 
   private val ruleKinds: List[String] =
     List(

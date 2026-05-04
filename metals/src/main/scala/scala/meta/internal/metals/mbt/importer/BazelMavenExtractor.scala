@@ -34,7 +34,6 @@ object BazelMavenExtractor {
 
   def extract(
       projectDir: AbsolutePath,
-      verbose: Boolean,
       shellRunner: ShellRunner,
       outputBase: Option[Path],
   )(implicit
@@ -42,11 +41,11 @@ object BazelMavenExtractor {
   ): Future[Seq[MbtDependencyModule]] = {
     // Find all maven_install.json files
     val mavenInstallPaths =
-      findAllMavenInstallJson(projectDir, verbose) match {
+      findAllMavenInstallJson(projectDir) match {
         case paths if paths.nonEmpty => Future.successful(paths)
         case _ =>
           runMavenPin(shellRunner, projectDir).map { pinOk =>
-            if (pinOk) findAllMavenInstallJson(projectDir, verbose)
+            if (pinOk) findAllMavenInstallJson(projectDir)
             else Seq.empty
           }
       }
@@ -61,10 +60,10 @@ object BazelMavenExtractor {
       } else {
         val allModules = existingPaths.flatMap { path =>
           Try {
-            if (verbose) println(s"Processing: $path")
+            scribe.debug(s"Processing: $path")
             val content = path.readText
             val json = gson.fromJson(content, classOf[JsonObject])
-            extractArtifacts(json, outputBase, projectDir.toNIO, verbose)
+            extractArtifacts(json, outputBase, projectDir.toNIO)
           } match {
             case Success(mods) => mods
             case Failure(e) =>
@@ -133,8 +132,7 @@ object BazelMavenExtractor {
    * Also searches for patterns like maven_install_*.json, *_maven_install.json
    */
   private def findAllMavenInstallJson(
-      projectDir: AbsolutePath,
-      verbose: Boolean,
+      projectDir: AbsolutePath
   ): Seq[AbsolutePath] = {
     val candidates = Seq(
       // Standard location
@@ -161,10 +159,8 @@ object BazelMavenExtractor {
       (candidates ++ patternMatches).distinct
         .filter(_.exists)
 
-    if (verbose) {
-      println("Found maven_install.json files:")
-      allCandidates.foreach(p => println(s"  - $p"))
-    }
+    scribe.debug("Found maven_install.json files:")
+    allCandidates.foreach(p => scribe.debug(s"  - $p"))
 
     allCandidates
   }
@@ -197,10 +193,9 @@ object BazelMavenExtractor {
       json: JsonObject,
       outputBase: Option[Path],
       projectDir: Path,
-      verbose: Boolean,
   ): Seq[MbtDependencyModule] = {
     val repositoryName = detectRepositoryName(json)
-    if (verbose) println(s"Using repository name: $repositoryName")
+    scribe.debug(s"Using repository name: $repositoryName")
     val externalDir = outputBase.map(_.resolve("external"))
 
     // Try new format first (artifacts key at root)
@@ -211,7 +206,6 @@ object BazelMavenExtractor {
         repositoryName,
         externalDir,
         projectDir,
-        verbose,
       )
     } else {
       // Try legacy format (dependency_tree.dependencies array)
@@ -220,19 +214,17 @@ object BazelMavenExtractor {
         Option(dt.getAsJsonArray("dependencies"))
       } match {
         case Some(deps) =>
-          if (verbose) println("Using legacy dependency_tree format")
+          scribe.debug("Using legacy dependency_tree format")
           extractFromLegacyFormat(
             deps,
             repositoryName,
             externalDir,
             projectDir,
-            verbose,
           )
         case None =>
-          if (verbose)
-            println(
-              "No 'artifacts' or 'dependency_tree.dependencies' found in maven_install.json"
-            )
+          scribe.debug(
+            "No 'artifacts' or 'dependency_tree.dependencies' found in maven_install.json"
+          )
           Seq.empty
       }
     }
@@ -246,7 +238,6 @@ object BazelMavenExtractor {
       repositoryName: String,
       externalDir: Option[Path],
       projectDir: Path,
-      verbose: Boolean,
   ): Seq[MbtDependencyModule] = {
     artifacts.entrySet().asScala.toSeq.flatMap { entry =>
       val coordKey = entry.getKey // e.g., "com.google.guava:guava"
@@ -258,7 +249,6 @@ object BazelMavenExtractor {
           repositoryName,
           externalDir,
           projectDir,
-          verbose,
         )
       }.toOption.flatten
     }
@@ -272,7 +262,6 @@ object BazelMavenExtractor {
       repositoryName: String,
       externalDir: Option[Path],
       projectDir: Path,
-      verbose: Boolean,
   ): Seq[MbtDependencyModule] = {
     val deps = dependencies.iterator().asScala.toSeq
 
@@ -294,7 +283,6 @@ object BazelMavenExtractor {
         repositoryName,
         externalDir,
         projectDir,
-        verbose,
       )
     }
   }
@@ -305,7 +293,6 @@ object BazelMavenExtractor {
       repositoryName: String,
       externalDir: Option[Path],
       projectDir: Path,
-      verbose: Boolean,
   ): Option[MbtDependencyModule] = {
     Try {
       val obj = elem.getAsJsonObject
@@ -321,7 +308,7 @@ object BazelMavenExtractor {
       val (groupId, artifactId, version) = (parts(0), parts(1), parts(2))
 
       if (version.contains("SNAPSHOT")) {
-        if (verbose) println(s"  Skipping SNAPSHOT: $coord")
+        scribe.debug(s"  Skipping SNAPSHOT: $coord")
         return None
       }
 
@@ -342,7 +329,6 @@ object BazelMavenExtractor {
             repositoryName,
             externalDir,
             projectDir,
-            verbose,
           )
         }
         .orElse {
@@ -354,7 +340,6 @@ object BazelMavenExtractor {
               artifactId,
               version,
               jarName,
-              verbose,
             )
           }
         }
@@ -389,7 +374,6 @@ object BazelMavenExtractor {
               repositoryName,
               externalDir,
               projectDir,
-              verbose,
             )
           }
           .orElse {
@@ -401,7 +385,6 @@ object BazelMavenExtractor {
                 artifactId,
                 version,
                 sourcesJarName,
-                verbose,
               )
             }
           }
@@ -420,7 +403,6 @@ object BazelMavenExtractor {
       artifactId: String,
       version: String,
       jarName: String,
-      verbose: Boolean,
   ): Option[String] = {
     Try {
       val m2Dir = Path.of(
@@ -438,15 +420,13 @@ object BazelMavenExtractor {
         return Some(targetPath.toString)
       }
 
-      if (verbose) println(s"  Downloading: $url")
+      scribe.debug(s"  Downloading: $url")
 
       val urlLower = url.toLowerCase
       if (!urlLower.startsWith("http://") && !urlLower.startsWith("https://")) {
-        if (verbose) {
-          println(
-            s"  Skipping download: URL must use http or https, got: $url"
-          )
-        }
+        scribe.debug(
+          s"  Skipping download: URL must use http or https, got: $url"
+        )
         None
       } else {
 
@@ -461,7 +441,7 @@ object BazelMavenExtractor {
         val in = connection.getInputStream
         try {
           Files.copy(in, targetPath)
-          if (verbose) println(s"  Downloaded to: $targetPath")
+          scribe.debug(s"  Downloaded to: $targetPath")
           Some(targetPath.toString)
         } finally {
           in.close()
@@ -492,7 +472,6 @@ object BazelMavenExtractor {
         extDir,
         patterns,
         repositoryName,
-        verbose = false,
       )
     }
 
@@ -513,7 +492,6 @@ object BazelMavenExtractor {
           extDir,
           patterns,
           repositoryName,
-          verbose = false,
         )
       }
       .map(_.toString)
@@ -537,7 +515,6 @@ object BazelMavenExtractor {
       repositoryName: String,
       externalDir: Option[Path],
       projectDir: Path,
-      verbose: Boolean,
   ): Option[MbtDependencyModule] = {
     if (!artifactInfo.isJsonObject) return None
 
@@ -550,7 +527,7 @@ object BazelMavenExtractor {
 
     version.flatMap { v =>
       if (v.contains("SNAPSHOT")) {
-        if (verbose) println(s"  Skipping SNAPSHOT: $coordKey:$v")
+        scribe.debug(s"  Skipping SNAPSHOT: $coordKey:$v")
         return None
       }
 
@@ -568,7 +545,6 @@ object BazelMavenExtractor {
         repositoryName,
         externalDir,
         projectDir,
-        verbose,
       )
 
       jarPath.map { jar =>
@@ -579,7 +555,6 @@ object BazelMavenExtractor {
           repositoryName,
           externalDir,
           projectDir,
-          verbose,
         )
 
         MbtDependencyModule(
@@ -610,7 +585,6 @@ object BazelMavenExtractor {
       repositoryName: String,
       externalDir: Option[Path],
       projectDir: Path,
-      verbose: Boolean,
   ): Option[String] = {
     val groupPath = groupId.replace('.', '/')
     val jarName = s"$artifactId-$version.jar"
@@ -626,7 +600,6 @@ object BazelMavenExtractor {
         artifactId,
         version,
         jarName,
-        verbose,
       )
     }
     if (jarFromBzlmod.isDefined) return jarFromBzlmod.map(_.toUri.toString)
@@ -642,7 +615,6 @@ object BazelMavenExtractor {
         extDir,
         workspacePatterns,
         repositoryName,
-        verbose,
       )
     }
     if (jarFromWorkspace.isDefined)
@@ -664,14 +636,12 @@ object BazelMavenExtractor {
         artifactId,
         version,
         jarName,
-        verbose,
       )
         .orElse(
           findInExternalRepositories(
             extDir,
             workspacePatterns,
             repositoryName,
-            verbose,
           )
         )
     }
@@ -721,7 +691,6 @@ object BazelMavenExtractor {
       artifactId: String,
       version: String,
       jarName: String,
-      verbose: Boolean,
   ): Option[Path] = {
     Try {
       Using.resource(Files.list(extDir)) { stream =>
@@ -748,13 +717,13 @@ object BazelMavenExtractor {
           val jarPath =
             dir.resolve(s"file/v1/$groupPath/$artifactId/$version/$jarName")
           if (Files.exists(jarPath)) {
-            if (verbose) println(s"  Found Bzlmod JAR: $jarPath")
+            scribe.debug(s"  Found Bzlmod JAR: $jarPath")
             Some(jarPath)
           } else {
             // Also try without the nested path (some artifacts are directly in the directory)
             val altJarPath = dir.resolve(s"file/$jarName")
             if (Files.exists(altJarPath)) {
-              if (verbose) println(s"  Found Bzlmod JAR (alt): $altJarPath")
+              scribe.debug(s"  Found Bzlmod JAR (alt): $altJarPath")
               Some(altJarPath)
             } else {
               None
@@ -773,7 +742,6 @@ object BazelMavenExtractor {
       extDir: Path,
       relativePaths: Seq[String],
       repositoryName: String,
-      verbose: Boolean,
   ): Option[Path] = {
     val directMatch =
       relativePaths.map(path => extDir.resolve(path)).find(Files.exists(_))
@@ -794,8 +762,8 @@ object BazelMavenExtractor {
             }
           }
 
-          if (verbose && candidateRepositories.nonEmpty) {
-            println(
+          if (candidateRepositories.nonEmpty) {
+            scribe.debug(
               s"bzlmod maven repositories: ${candidateRepositories.map(_.getFileName).mkString(", ")}"
             )
           }
@@ -818,7 +786,7 @@ object BazelMavenExtractor {
             }
             .headOption
             .map { path =>
-              if (verbose) println(s"  Found Bzlmod maven JAR: $path")
+              scribe.debug(s"  Found Bzlmod maven JAR: $path")
               path
             }
         }
@@ -836,25 +804,25 @@ object BazelMavenExtractor {
       repositoryName: String,
       externalDir: Option[Path],
       projectDir: Path,
-      verbose: Boolean,
   ): Option[String] = {
     val groupPath = groupId.replace('.', '/')
     val sourcesJarName = s"$artifactId-$version-sources.jar"
 
-    // Build Bzlmod-style directory name for sources: group_artifact_jar_sources_version
-    val bzlmodSourcesDir = toBzlmodSourcesDir(groupId, artifactId, version)
+    val bzlmodSourcesDirs = toBzlmodSourcesDirs(groupId, artifactId, version)
 
     // Try Bzlmod patterns first
     val sourcesFromBzlmod = externalDir.flatMap { extDir =>
-      findBzlmodJar(
-        extDir,
-        bzlmodSourcesDir,
-        groupPath,
-        artifactId,
-        version,
-        sourcesJarName,
-        verbose,
-      )
+      bzlmodSourcesDirs.flatMap { bzlmodSourcesDir =>
+        scribe.debug(s"Finding sources in Bzlmod directory: $bzlmodSourcesDir")
+        findBzlmodJar(
+          extDir,
+          bzlmodSourcesDir,
+          groupPath,
+          artifactId,
+          version,
+          sourcesJarName,
+        )
+      }.headOption
     }
 
     if (sourcesFromBzlmod.isDefined)
@@ -871,7 +839,6 @@ object BazelMavenExtractor {
         extDir,
         workspacePatterns,
         repositoryName,
-        verbose,
       )
     }
 
@@ -888,21 +855,23 @@ object BazelMavenExtractor {
     }.getOrElse(None)
 
     val sourcesFromBazelProject = bazelProjectPath.flatMap { extDir =>
-      findBzlmodJar(
-        extDir,
-        bzlmodSourcesDir,
-        groupPath,
-        artifactId,
-        version,
-        sourcesJarName,
-        verbose,
-      )
+      bzlmodSourcesDirs
+        .flatMap { bzlmodSourcesDir =>
+          findBzlmodJar(
+            extDir,
+            bzlmodSourcesDir,
+            groupPath,
+            artifactId,
+            version,
+            sourcesJarName,
+          )
+        }
+        .headOption
         .orElse(
           findInExternalRepositories(
             extDir,
             workspacePatterns,
             repositoryName,
-            verbose,
           )
         )
     }
@@ -925,16 +894,19 @@ object BazelMavenExtractor {
   }
 
   /**
-   * Convert artifact coordinates to Bzlmod sources directory name format.
-   * Example: com.google.guava:guava:32.1.3-android -> com_google_guava_guava_jar_sources_32_1_3_android
+   * Convert artifact coordinates to Bzlmod sources directory name formats.
+   * Example: com.google.guava:guava:32.1.3-android -> com_google_guava_guava_sources_32_1_3_android
    */
-  private def toBzlmodSourcesDir(
+  private def toBzlmodSourcesDirs(
       groupId: String,
       artifactId: String,
       version: String,
-  ): String = {
+  ): Seq[String] = {
     val sanitize = (s: String) =>
       s.replace('.', '_').replace('-', '_').replace(':', '_')
-    s"${sanitize(groupId)}_${sanitize(artifactId)}_jar_sources_${sanitize(version)}"
+    Seq(
+      s"${sanitize(groupId)}_${sanitize(artifactId)}_sources_${sanitize(version)}",
+      s"${sanitize(groupId)}_${sanitize(artifactId)}_jar_sources_${sanitize(version)}",
+    )
   }
 }
