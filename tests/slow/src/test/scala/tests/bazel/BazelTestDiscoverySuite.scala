@@ -2,13 +2,16 @@ package tests.bazel
 
 import java.util.concurrent.TimeUnit
 
+import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 
 import scala.meta.internal.builds.BazelBuildTool
 import scala.meta.internal.builds.BazelDigest
 import scala.meta.internal.builds.ShellRunner
 import scala.meta.internal.metals.DebugDiscoveryParams
+import scala.meta.internal.metals.EmptyWorkDoneProgress
 import scala.meta.internal.metals.JsonParser._
+import scala.meta.internal.metals.Time
 import scala.meta.internal.metals.{BuildInfo => V}
 import scala.meta.io.AbsolutePath
 
@@ -21,7 +24,12 @@ class BazelTestDiscoverySuite
 
   val bazelVersion = "8.2.1"
 
-  val buildTool: BazelBuildTool = BazelBuildTool(() => userConfig, workspace)
+  val buildTool: BazelBuildTool = BazelBuildTool(
+    () => userConfig,
+    workspace,
+    new ShellRunner(Time.system, EmptyWorkDoneProgress, () => userConfig),
+    ExecutionContext.global,
+  )
 
   def buildFileWithToolchain(): String =
     s"""|/BUILD
