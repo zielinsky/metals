@@ -2,6 +2,7 @@ package tests.mbt
 
 import java.nio.file.Files
 
+import scala.concurrent.Future
 import scala.jdk.CollectionConverters._
 import scala.util.Properties
 
@@ -11,13 +12,16 @@ import scala.meta.internal.metals.Configs.ReferenceProviderConfig
 import scala.meta.internal.metals.Configs.WorkspaceSymbolProviderConfig
 import scala.meta.internal.metals.UserConfiguration
 import scala.meta.internal.metals.mbt.MbtBuildServer
+import scala.meta.internal.mtags.ScalametaCommonEnrichments._
 
 import coursierapi.Dependency
 import coursierapi.Fetch
+import org.eclipse.lsp4j.FileChangeType
 import tests.BaseCompletionLspSuite
 import tests.BuildInfo
 import tests.Library
 import tests.TestHovers
+import tests.TestingServer
 
 /**
  * End-to-end checks for `.metals/mbt.json` with the built-in MBT BSP server:
@@ -317,4 +321,95 @@ class MbtBuildServerLspSuite
     } yield ()
   }
 
+  // Run this test with virtual document support so that JDK sources are served
+  // as src.zip! URIs. When a PC request arrives for such a URI, PruneJavaFile
+  // materializes the file to .metals/out for --patch-module. The editor then
+  // fires didChangeWatchedFiles for the new file (workspace/**/*.java glob
+  // matches it). This test verifies those events are silently dropped and the
+  // materialized file never enters the MBT index or Scala sourcepath.
+  test(
+    "metals-out-not-indexed-after-jdk-source-hover"
+      .tag(TestingServer.virtualDocTag)
+  ) {
+    cleanWorkspace()
+    val mbtJson = // namespaces might filter out the problematic file
+      s"""|{
+          |}""".stripMargin
+
+    for {
+      _ <- initialize(
+        s"""|/.metals/mbt.json
+            |$mbtJson
+            |/src/Foo.scala
+            |package example;
+            |
+            |object Foo {
+            |  def show(obj: java.lang.Object): String = {
+            |    obj.toString();
+            |  }
+            |}
+            |/src/Dummy.scala
+            |package example
+            |object Dummy {
+            |  def ok: String = ""
+            |}
+            |""".stripMargin
+      )
+      _ = assertConnectedToBuildServer("MBT")
+      _ <- server.didOpen("src/Foo.scala")
+      // Navigate to the definition of toString (a JDK method). In virtual-doc mode
+      // this returns a src.zip! URI so the editor can open the JDK source.
+      definitions <- server.definitionSubstringQuery(
+        "src/Foo.scala",
+        "    obj.toStr@@ing();",
+      )
+      srcZipLoc = definitions.find(_.getUri.contains("src.zip"))
+      // Not strictly necessary assertion here, but this is the thing that causes the issue
+      _ = assert(
+        srcZipLoc.isDefined,
+        s"Expected a src.zip! definition for String, got: $definitions",
+      )
+      // Verify PruneJavaFile actually wrote something to .metals/out.
+      metalsOut = workspace.resolve(".metals/out")
+      metalsOutFiles = metalsOut.listRecursive.filter(_.isFile).toList
+      _ = assert(
+        metalsOutFiles.nonEmpty,
+        ".metals/out should contain at least one file materialised by PruneJavaFile",
+      )
+      // Simulate the editor firing didChangeWatchedFiles for each materialised
+      // file (workspace/**/*.java glob delivers these events).
+      _ <- Future.traverse(metalsOutFiles) { f =>
+        server.didChangeWatchedFiles(
+          workspace.toNIO.relativize(f.toNIO).toString,
+          FileChangeType.Created,
+        )
+      }
+      _ <- Future.traverse(metalsOutFiles) { f =>
+        server.didChangeWatchedFiles(
+          workspace.toNIO.relativize(f.toNIO).toString
+        )
+      }
+      // Normal workspace features must still work after the spurious events.
+      _ = assertNoDiagnostics()
+      // crash appeared even after resetting the presentation compiler
+      _ <- server.server.resetPresentationCompilers()
+      _ <- server.assertHover(
+        "src/Foo.scala",
+        """|object Foo {
+           |  def show(obj: java.lang.Object): String = {
+           |    obj.toSt@@ring();
+           |  }
+           |}""".stripMargin,
+        s"""|${"def toString(): String".hover}
+            |Returns a string representation of the object.""".stripMargin,
+      )
+      _ <- server.assertHover(
+        "src/Dummy.scala",
+        """|object Dummy {
+           |  def ok: Str@@ing = ""
+           |}""".stripMargin,
+        s"""|${"type String: String".hover}""".stripMargin,
+      )
+    } yield ()
+  }
 }
