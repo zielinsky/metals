@@ -346,6 +346,7 @@ abstract class MetalsLspService(
       mbt.ProtobufTemplateAndTestIndexFilter,
     ),
     protobufLspConfig = () => userConfig.protobufLspConfig,
+    metalsOutDir = Some(embedded.targetDir),
   )
 
   override val mbtSymbolSearch: MbtWorkspaceSymbolProvider = mbt2

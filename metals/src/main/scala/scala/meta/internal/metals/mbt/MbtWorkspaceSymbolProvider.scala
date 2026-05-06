@@ -107,7 +107,9 @@ class MbtWorkspaceSymbolProvider(
       ProtobufVersionHistoryIndexFilter,
       ProtobufTemplateAndTestIndexFilter,
     ),
-    protobufLspConfig: () => ProtobufLspConfig = () => ProtobufLspConfig.default,
+    protobufLspConfig: () => ProtobufLspConfig = () =>
+      ProtobufLspConfig.default,
+    metalsOutDir: Option[Path] = None,
 )(implicit
     val ec: ExecutionContext = ExecutionContext.Implicits.global,
     val rc: ReportContext = LoggerReportContext,
@@ -693,28 +695,35 @@ class MbtWorkspaceSymbolProvider(
       doc: IndexedDocument,
       updateDocumentKeys: Boolean,
   ): Future[Unit] = {
-    val old = documents.put(file, doc)
-    if (old == None && updateDocumentKeys) {
-      updateDocumentsKeys(documents)
-    }
-    addDocumentToPackages(doc.semanticdbPackages, file)
-
-    if (
-      updateDocumentKeys &&
-      doc.language.isJava &&
-      javaSymbolLoader().isTurbineClasspath
-    ) {
-      doc.semanticdbPackages.headOption match {
-        case Some(pkg) =>
-          val input = file.toInputFromBuffers(buffers)
-          val packageName = pkg.stripSuffix("/").replace("/", ".")
-          val compilationUnit = doc.toSemanticdbCompilationUnit(input)
-          turbineCompiler.onDidChange(packageName, compilationUnit).ignoreValue
-        case None =>
-          Future.unit
-      }
-    } else {
+    // .metals/out contains JDK sources materialized for --patch-module; they are not workspace sources
+    if (metalsOutDir.exists(outDir => file.toNIO.startsWith(outDir))) {
       Future.unit
+    } else {
+      val old = documents.put(file, doc)
+      if (old == None && updateDocumentKeys) {
+        updateDocumentsKeys(documents)
+      }
+      addDocumentToPackages(doc.semanticdbPackages, file)
+
+      if (
+        updateDocumentKeys &&
+        doc.language.isJava &&
+        javaSymbolLoader().isTurbineClasspath
+      ) {
+        doc.semanticdbPackages.headOption match {
+          case Some(pkg) =>
+            val input = file.toInputFromBuffers(buffers)
+            val packageName = pkg.stripSuffix("/").replace("/", ".")
+            val compilationUnit = doc.toSemanticdbCompilationUnit(input)
+            turbineCompiler
+              .onDidChange(packageName, compilationUnit)
+              .ignoreValue
+          case None =>
+            Future.unit
+        }
+      } else {
+        Future.unit
+      }
     }
   }
 
