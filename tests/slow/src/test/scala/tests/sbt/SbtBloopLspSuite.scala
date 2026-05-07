@@ -217,11 +217,12 @@ class SbtBloopLspSuite
           |}
           |""".stripMargin
       )
-      _ <- server.executeCommand(ServerCommands.ImportBuild)
       _ = assertNoDiff(
         client.workspaceMessageRequests,
         BloopVersionChange.msg,
       )
+      _ = client.messageRequests.clear()
+      _ <- server.executeCommand(ServerCommands.ImportBuild)
       _ = assertStatus(_.isInstalled)
     } yield ()
   }
@@ -667,6 +668,38 @@ class SbtBloopLspSuite
       _ = assertNoDiff(hoverRes, expectedHoverRes)
     } yield ()
 
+  }
+
+  test("sbt-file-after-reset") {
+    cleanWorkspace()
+    for {
+      _ <- initialize(
+        s"""|/build.sbt
+            |scalaVersion := "$scalaVersion"
+         """.stripMargin
+      )
+      hoverRes <- assertHoverAtPos("build.sbt", 0, 2)
+      expectedHoverRes =
+        """|```scala
+           |val scalaVersion: SettingKey[String]
+           |```
+           |```range
+           |scalaVersion
+           |```""".stripMargin
+      _ = assertNoDiff(hoverRes, expectedHoverRes)
+      _ = server.headServer.tables.buildTool.reset()
+      _ = assert(server.headServer.tables.buildTool.selectedBuildTool().isEmpty)
+      _ <- server.executeCommand(ServerCommands.ConnectBuildServer)
+      hoverRes <- assertHoverAtPos("build.sbt", 0, 2)
+      expectedHoverRes =
+        """|```scala
+           |val scalaVersion: SettingKey[String]
+           |```
+           |```range
+           |scalaVersion
+           |```""".stripMargin
+      _ = assertNoDiff(hoverRes, expectedHoverRes)
+    } yield ()
   }
 
   test("scala-file-hover") {

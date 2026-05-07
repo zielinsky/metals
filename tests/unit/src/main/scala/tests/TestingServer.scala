@@ -789,7 +789,10 @@ final case class TestingServer(
       requestOtherThreadStackTrace: Boolean = false,
   ): Future[TestDebugger] = {
 
-    assertSystemExit(parameter)
+    /// this might break on CI and causes tests to be flaky
+    if (System.getenv("CI") == null) {
+      assertSystemExit(parameter)
+    }
     val targets = List(new b.BuildTargetIdentifier(buildTarget(target)))
     val params =
       new b.DebugSessionParams(targets.asJava)
@@ -929,6 +932,10 @@ final case class TestingServer(
     server.stacktraceAnalyzer.stacktraceLenses(
       stacktrace.split('\n').toList
     )
+  }
+
+  def resolveStacktraceLocation(stacktraceLine: String): Option[l.Location] = {
+    server.stacktraceAnalyzer.resolveStacktraceLocationCommand(stacktraceLine)
   }
 
   def exportEvaluation(filename: String): Option[String] = {

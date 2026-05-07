@@ -23,6 +23,7 @@ import scala.meta.internal.builds.ScalaCliBuildTool
 import scala.meta.internal.builds.ShellRunner
 import scala.meta.internal.metals.MetalsEnrichments._
 import scala.meta.internal.metals.clients.language.ConfiguredLanguageClient
+import scala.meta.internal.metals.data.ResetWorkspaceState
 import scala.meta.internal.metals.doctor.HeadDoctor
 import scala.meta.internal.metals.doctor.MetalsServiceInfo
 import scala.meta.internal.metals.mbt.MbtBuildServer
@@ -30,6 +31,7 @@ import scala.meta.internal.metals.mcp.McpQueryEngine
 import scala.meta.internal.metals.mcp.McpSymbolSearch
 import scala.meta.internal.metals.mcp.McpTestRunner
 import scala.meta.internal.metals.mcp.MetalsMcpServer
+import scala.meta.internal.metals.mcp.ScalafixLlmRuleProvider
 import scala.meta.internal.metals.watcher.FileWatcher
 import scala.meta.internal.metals.watcher.FileWatcherEvent
 import scala.meta.internal.metals.watcher.FileWatcherEvent.EventType
@@ -284,6 +286,16 @@ class ProjectMetalsLspService(
       mcpSearch,
     )
 
+  val scalafixLlmRuleProvider = new ScalafixLlmRuleProvider(
+    folder,
+    scalafixProvider,
+    () => userConfig,
+    languageClient,
+    buildTargets,
+    scalaVersionSelector,
+    compilations,
+  )
+
   def startMcpServer(): Future[Unit] =
     Future {
       if (!isMcpServerRunning.getAndSet(true))
@@ -304,6 +316,7 @@ class ProjectMetalsLspService(
             connectionProvider,
             scalaVersionSelector,
             formattingProvider,
+            scalafixLlmRuleProvider,
           )
         ).run()
     }.recover { case e: Exception =>
@@ -668,36 +681,39 @@ class ProjectMetalsLspService(
 
   }
 
-  def resetWorkspace(): Future[Unit] = {
+  def resetWorkspace(): Future[ResetWorkspaceState] = {
     for {
-      _ <- connect(Disconnect(true))
-      _ = clearBuildToolFolders()
+      _ <- compilations.clean(recompile = false)
+      resetWorkspaceState = clearBuildToolFolders()
       _ = tables.cleanAll()
-      _ <- connectionProvider.fullConnect()
-    } yield ()
+    } yield resetWorkspaceState
   }
 
-  private def clearBuildToolFolders(): Unit = {
+  private def clearBuildToolFolders(): ResetWorkspaceState = {
     buildTools.dbBspPath match {
       case Some(dir) =>
         clearFolders(dir)
-        return
+        ResetWorkspaceState(false)
       case _ =>
+        val wasBloop = optProjectRoot match {
+          // NOTE(olafurpg): optProjectRoot is seemingly always None?
+          case Some(path) if buildTools.isBloop(path) =>
+            true
+          case Some(path) if buildTools.isBazelBsp =>
+            clearFolders(
+              path.resolve(Directories.bazelBsp),
+              path.resolve(Directories.bsp),
+            )
+            false
+          case Some(path) if buildTools.isBsp =>
+            clearFolders(path.resolve(Directories.bsp))
+            false
+          case _ =>
+            false
+        }
+        ResetWorkspaceState(wasBloop)
     }
 
-    optProjectRoot match {
-      // NOTE(olafurpg): optProjectRoot is seemingly always None?
-      case Some(path) if buildTools.isBloop(path) =>
-        clearBloopDir(path)
-      case Some(path) if buildTools.isBazelBsp =>
-        clearFolders(
-          path.resolve(Directories.bazelBsp),
-          path.resolve(Directories.bsp),
-        )
-      case Some(path) if buildTools.isBsp =>
-        clearFolders(path.resolve(Directories.bsp))
-      case _ =>
-    }
   }
 
   val treeView =
@@ -760,13 +776,16 @@ class ProjectMetalsLspService(
         newConfig.startMcpServer && newConfig.startMcpServer != old.startMcpServer
       ) startMcpServer()
       else Future.unit
-
+    val projectRootChanged =
+      userConfig.customProjectRoot != old.customProjectRoot
     val slowConnect =
       if (
-        userConfig.customProjectRoot != old.customProjectRoot || userConfig.enableBestEffort != old.enableBestEffort
+        projectRootChanged || userConfig.enableBestEffort != old.enableBestEffort
       ) {
+        if (projectRootChanged) {
+          tables.buildServers.reset()
+        }
         tables.buildTool.reset()
-        tables.buildServers.reset()
         connectionProvider.fullConnect()
       } else Future.successful(())
 

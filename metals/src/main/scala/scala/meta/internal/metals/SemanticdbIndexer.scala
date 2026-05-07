@@ -33,7 +33,7 @@ class SemanticdbIndexer(
     for {
       targetRoot <- buildTargets.allTargetRoots
     } {
-      if (semanticdbFilesInJar) {
+      if (semanticdbFilesInJar && targetRoot.isJar) {
         onChangeJar(targetRoot.toNIO)
       } else {
         onChangeDirectory(
@@ -73,9 +73,10 @@ class SemanticdbIndexer(
   }
 
   private def onChangeJar(path: Path): Unit = {
-    if (AbsolutePath(path).isFile) {
+    val jarPath = AbsolutePath(path)
+    if (jarPath.exists && jarPath.isJar) {
       val jarFS =
-        PlatformFileIO.newJarFileSystem(AbsolutePath(path), create = false)
+        PlatformFileIO.newJarFileSystem(jarPath, create = false)
       jarFS.getRootDirectories.forEach { root =>
         val stream = Files.walk(root)
         try {

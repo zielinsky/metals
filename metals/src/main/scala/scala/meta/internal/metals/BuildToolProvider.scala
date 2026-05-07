@@ -14,7 +14,7 @@ import scala.meta.io.AbsolutePath
 class BuildToolProvider(
     buildTools: BuildTools,
     tables: Tables,
-    folder: AbsolutePath,
+    val folder: AbsolutePath,
     warnings: ProjectWarnings,
     languageClient: MetalsLanguageClient,
     preferredBuildServer: Future[Option[String]],
@@ -61,6 +61,18 @@ class BuildToolProvider(
             BuildTool.Found(buildTool, digest)
           case None => BuildTool.NoChecksum(buildTool, folder)
         }
+    }
+  }
+
+  /**
+   * Loads a build tool if there is only one build tool in the workspace.
+   * Can be used to fix mismatched settings in the database.
+   */
+  def loadSingleBuildTool(): Future[Option[BuildTool]] = {
+    buildTools.loadSupported() match {
+      case tool :: Nil =>
+        Future(Some(tool))
+      case _ => Future(None)
     }
   }
 

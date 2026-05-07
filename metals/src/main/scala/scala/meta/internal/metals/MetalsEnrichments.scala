@@ -627,15 +627,14 @@ object MetalsEnrichments
      *
      * Example: `/path/hello.jar -> /path/_semanticdb/hello`
      */
-    def resolveIfJar: AbsolutePath = {
+    def alternativeTargetRoot: Option[AbsolutePath] = {
       if (path.isJar) {
-        path
-        // val filename = path.toNIO.getFileName.toString
-        // val filename0 = filename.stripSuffix(".jar").stripSuffix(".srcjar")
-        // val targetroot = path.parent.resolve(s"_semanticdb/$filename0")
-        // targetroot
+        val filename = path.toNIO.getFileName.toString
+        val filename0 = filename.stripSuffix(".jar").stripSuffix(".srcjar")
+        val targetroot = path.parent.resolve(s"_semanticdb/$filename0")
+        Some(targetroot)
       } else {
-        path
+        None
       }
     }
 
@@ -869,8 +868,15 @@ object MetalsEnrichments
       else value
     }
 
-    def symbolToFullQualifiedName: String =
-      value.replaceAll("/|#", ".").stripSuffix(".")
+    def symbolToFullyQualifiedName: String =
+      value
+        .replace("/", ".")
+        .stripSuffix("#")
+        .replaceAll(raw"package\.", "")
+        .replaceAll(raw"([^)])\." + "$", "$1\\$")
+        .stripSuffix(".")
+        .replaceAll(raw"(\+\d+)", "")
+        .stripSuffix("()")
   }
 
   implicit class XtensionTextDocumentSemanticdb(textDocument: s.TextDocument) {

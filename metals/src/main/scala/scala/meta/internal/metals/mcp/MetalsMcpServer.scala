@@ -10,6 +10,7 @@ import java.util.{Map => JMap}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.reflect.ClassTag
 import scala.util.Try
 import scala.util.control.NonFatal
 
@@ -50,8 +51,10 @@ import io.modelcontextprotocol.spec.McpSchema.Tool
 import io.undertow.Undertow
 import io.undertow.servlet.Servlets
 import io.undertow.servlet.api.InstanceHandle
+import org.eclipse.lsp4j.ApplyWorkspaceEditParams
 import org.eclipse.lsp4j.MessageParams
 import org.eclipse.lsp4j.MessageType
+import org.eclipse.lsp4j.WorkspaceEdit
 import org.eclipse.lsp4j.services.LanguageClient
 import reactor.core.publisher.Mono
 
@@ -69,6 +72,7 @@ class MetalsMcpServer(
     connectionProvider: ConnectionProvider,
     scalaVersionSelector: ScalaVersionSelector,
     formattingProvider: FormattingProvider,
+    scalafixLlmRuleProvider: ScalafixLlmRuleProvider,
 )(implicit
     ec: ExecutionContext
 ) extends Cancelable {
@@ -127,6 +131,9 @@ class MetalsMcpServer(
     asyncServer.addTool(createFindDepTool()).subscribe()
     asyncServer.addTool(createListModulesTool()).subscribe()
     asyncServer.addTool(createFormatTool()).subscribe()
+    asyncServer.addTool(createGenerateScalafixRuleTool()).subscribe()
+    asyncServer.addTool(createRunScalafixRuleTool()).subscribe()
+    asyncServer.addTool(createListScalafixRulesTool()).subscribe()
 
     // Log server initialization
     asyncServer.loggingNotification(
@@ -255,10 +262,16 @@ class MetalsMcpServer(
         compilations
           .cascadeCompile(buildTargets.allBuildTargetIds)
           .map { _ =>
-            val errors = diagnostics.allDiagnostics.show(projectPath)
+            val allDiagnostics = diagnostics.allDiagnostics
+            val diagnosticsOutput = allDiagnostics.show(projectPath)
             val content =
-              if (errors.isEmpty) "Compilation successful."
-              else s"Compilation failed with errors:\n$errors"
+              if (diagnosticsOutput.isEmpty) {
+                "Compilation successful."
+              } else if (allDiagnostics.hasErrors) {
+                s"Compilation failed with errors:\n$diagnosticsOutput"
+              } else {
+                s"Compilation successful with warnings:\n$diagnosticsOutput"
+              }
             new CallToolResult(createContent(content), false)
           }
           .toMono
@@ -294,17 +307,34 @@ class MetalsMcpServer(
                 lazy val buildTarget = buildTargets.inverseSources(path)
 
                 def inFileErrors = {
-                  val errors = diagnostics.forFile(path).show()
-                  if (errors.isEmpty) None
-                  else Some(s"Found errors in $path:\n$errors")
+                  val fileDiagnostics = diagnostics.forFile(path)
+                  val diagnosticsOutput = fileDiagnostics.show()
+                  if (diagnosticsOutput.isEmpty) None
+                  else {
+                    val prefix = if (fileDiagnostics.hasErrors) {
+                      "Found errors in"
+                    } else {
+                      "Found warnings in"
+                    }
+                    Some(s"$prefix $path:\n$diagnosticsOutput")
+                  }
                 }
 
                 def inModuleErrors =
                   for {
                     bt <- buildTarget
-                    errors <- this.inModuleErrors(bt)
+                    diagnosticsOutput <- this.inModuleErrors(bt)
                   } yield {
-                    s"No errors in the file, but found compile errors in the module:\n$errors"
+                    val moduleDiagnostics =
+                      diagnostics.allDiagnostics.filter { case (path, _) =>
+                        buildTargets.inverseSources(path).contains(bt)
+                      }
+                    val issuesType = if (moduleDiagnostics.hasErrors) {
+                      "errors"
+                    } else {
+                      "warnings"
+                    }
+                    s"No issues in the file, but found compile $issuesType in the module:\n$diagnosticsOutput"
                   }
 
                 def inUpstreamModulesErrors =
@@ -357,7 +387,18 @@ class MetalsMcpServer(
           ) match {
             case Some(target) =>
               val result = inModuleErrors(target.id)
-                .map(errors => s"Found errors in the module:\n$errors")
+                .map { diagnosticsOutput =>
+                  val moduleDiagnostics =
+                    diagnostics.allDiagnostics.filter { case (path, _) =>
+                      buildTargets.inverseSources(path).contains(target.id)
+                    }
+                  val prefix = if (moduleDiagnostics.hasErrors) {
+                    "Found errors in the module"
+                  } else {
+                    "Found warnings in the module"
+                  }
+                  s"$prefix:\n$diagnosticsOutput"
+                }
                 .orElse(upstreamModulesErros(target.id, "module"))
                 .getOrElse("Compilation successful.")
               new CallToolResult(createContent(result), false)
@@ -373,12 +414,15 @@ class MetalsMcpServer(
   }
 
   private def inModuleErrors(buildTarget: BuildTargetIdentifier) = {
-    if (diagnostics.hasCompilationErrors(buildTarget)) {
-      val errors =
-        diagnostics.allDiagnostics.filter { case (path, _) =>
-          buildTargets.inverseSources(path).contains(buildTarget)
-        }
-      Some(errors.show(projectPath))
+    val moduleDiagnostics =
+      diagnostics.allDiagnostics.filter { case (path, _) =>
+        buildTargets.inverseSources(path).contains(buildTarget)
+      }
+
+    if (
+      moduleDiagnostics.nonEmpty && (moduleDiagnostics.hasErrors || moduleDiagnostics.hasWarnings)
+    ) {
+      Some(moduleDiagnostics.show(projectPath))
     } else None
   }
 
@@ -425,7 +469,13 @@ class MetalsMcpServer(
          |  "required": ["testClass"]
          |}""".stripMargin
     new AsyncToolSpecification(
-      new Tool("test", "Run Scala test suite", schema),
+      new Tool(
+        "test",
+        """|Run Scala test suite. Execute specific test classes and individual test methods. 
+           |Supports verbose output and can run tests from any testing 
+           |framework (ScalaTest, MUnit, etc.)""".stripMargin,
+        schema,
+      ),
       withErrorHandling { (exchange, arguments) =>
         val testClass = arguments.getAs[String]("testClass")
         val optPath = arguments
@@ -473,7 +523,14 @@ class MetalsMcpServer(
       }
     """
     new AsyncToolSpecification(
-      new Tool("glob-search", "Search for symbols using glob pattern", schema),
+      new Tool(
+        "glob-search",
+        """|Search for symbols using glob pattern. Find packages, classes, objects, methods, traits, 
+           |and other Scala symbols by partial name matching. Returns symbol locations 
+           |and signatures from the entire project workspace.
+           |Use this if you encounter unknown API, for example proprietary libraries.""".stripMargin,
+        schema,
+      ),
       withErrorHandling { (exchange, arguments) =>
         val query = arguments.getAs[String]("query")
         val path = arguments.getFileInFocus
@@ -518,23 +575,29 @@ class MetalsMcpServer(
     new AsyncToolSpecification(
       new Tool(
         "typed-glob-search",
-        "Search for symbols by type using glob pattern",
+        """|Search for symbols by type using glob pattern. Filter symbol search results 
+           |by specific symbol types (package, class, object, function, method, trait). 
+           |More precise than glob-search when you know the symbol type you're looking for.
+           |Use this if you encounter unknown API, for example proprietary libraries.""".stripMargin,
         schema,
       ),
       withErrorHandling { (exchange, arguments) =>
         val query = arguments.getAs[String]("query")
         val path = arguments.getFileInFocus
-        val symbolTypes = scala.jdk.CollectionConverters
-          .ListHasAsScala(
-            arguments
-              .getAs[JList[String]]("symbolType")
-          )
-          .asScala
-          .flatMap(s => SymbolType.values.find(_.name == s))
-          .toSet
+        val symbolTypes = arguments.getAsList[String]("symbolType")
+
+        val invalidSymbols =
+          symbolTypes.filterNot(s => SymbolType.values.exists(_.name == s))
+        if (invalidSymbols.nonEmpty) {
+          val validTypes = SymbolType.values.map(_.name).mkString(", ")
+          throw new InvalidSymbolTypeException(invalidSymbols.toSeq, validTypes)
+        }
+
+        val symbolTypesSet =
+          symbolTypes.flatMap(s => SymbolType.values.find(_.name == s)).toSet
 
         queryEngine
-          .globSearch(query, symbolTypes, path)
+          .globSearch(query, symbolTypesSet, path)
           .map(result =>
             new CallToolResult(
               createContent(result.map(_.show).mkString("\n")),
@@ -604,7 +667,9 @@ class MetalsMcpServer(
     new AsyncToolSpecification(
       new Tool(
         "get-docs",
-        "Get documentation for a chosen Scala symbol",
+        """|Get documentation for a chosen Scala symbol. Retrieves ScalaDoc comments, 
+           |parameter descriptions, return types, and usage examples for classes, methods, 
+           |functions, and other symbols using their fully qualified name.""".stripMargin,
         schema,
       ),
       withErrorHandling { (exchange, arguments) =>
@@ -644,7 +709,9 @@ class MetalsMcpServer(
     new AsyncToolSpecification(
       new Tool(
         "get-usages",
-        "Get usages for a chosen Scala symbol. Returns list of files with line numbers.",
+        """|Get usages for a chosen Scala symbol. Find all references and usages of classes, 
+           |methods, variables, and other symbols across the entire project. Returns precise 
+           |locations with file paths and line numbers for refactoring and code analysis.""".stripMargin,
         schema,
       ),
       withErrorHandling { (exchange, arguments) =>
@@ -804,7 +871,7 @@ class MetalsMcpServer(
     new AsyncToolSpecification(
       new Tool(
         "format-file",
-        "Format a Scala file and return the formatted text",
+        "Format a Scala file and use LSP to apply the changes. If LSP client is not available, it will be done in the background",
         schema,
       ),
       withErrorHandling { (_, arguments) =>
@@ -817,22 +884,39 @@ class MetalsMcpServer(
 
           formattingProvider
             .formatForMcp(path, projectPath, cancelChecker)
-            .map {
+            .flatMap {
               case Left(errorMessage) =>
-                new CallToolResult(
-                  createContent(errorMessage),
-                  true,
+                Future.successful(
+                  new CallToolResult(
+                    createContent(errorMessage),
+                    true,
+                  )
                 )
-              case Right(None) =>
-                new CallToolResult(
-                  createContent("File is already properly formatted."),
-                  false,
+              case Right(Nil) =>
+                Future.successful(
+                  new CallToolResult(
+                    createContent("File is already properly formatted."),
+                    false,
+                  )
                 )
-              case Right(Some(formattedText)) =>
-                new CallToolResult(
-                  createContent(formattedText),
-                  false,
-                )
+              case Right(formattedText) =>
+                languageClient
+                  .applyEdit(
+                    new ApplyWorkspaceEditParams(
+                      new WorkspaceEdit(
+                        Map(
+                          path.toURI.toString -> formattedText.asJava
+                        ).asJava
+                      )
+                    )
+                  )
+                  .asScala
+                  .map { _ =>
+                    new CallToolResult(
+                      createContent(s"$path was formatted"),
+                      false,
+                    )
+                  }
             }
             .toMono
         } else {
@@ -847,6 +931,188 @@ class MetalsMcpServer(
             )
             .toMono
         }
+      },
+    )
+  }
+
+  private def createGenerateScalafixRuleTool(): AsyncToolSpecification = {
+    val schema =
+      """{
+        |  "type": "object",
+        |  "properties": {
+        |    "ruleImplementation": {
+        |      "type": "string",
+        |      "description": "The implementation of the scalafix rule to run, this should contain the actual scalafix rule implementation."
+        |    },
+        |    "description": {
+        |      "type": "string",
+        |      "description": "The description of the scalafix rule to run for later MCP invocations."
+        |    },
+        |    "targets": {
+        |      "type": "array",
+        |      "description": "The targets to run the rule on, if empty will run on the last focused target"
+        |    },
+        |    "sampleCode": {
+        |      "type": "string",
+        |      "description": "Sample code that we are trying to match in the rule, if nothing was matched an error will be returned with the structure of this sample."
+        |    },
+        |    "fileToRunOn": {
+        |      "type": "string",
+        |      "description": "File to run it all, if empty will run on all files in given targets"
+        |    }
+        |  },
+        |  "required": ["description", "ruleImplementation"]
+        |} 
+        |""".stripMargin
+    new AsyncToolSpecification(
+      new Tool(
+        "generate-scalafix-rule",
+        """|Generate a scalafix rule and run it on the current project.
+           |
+           |Use this tool whenever you want to migrate a particular code pattern inside the entire codebase. 
+           |This might include fixing code smells, refactorings or migrating between versions of Scala or a particular library. 
+           |The generated rule will be created in .metals/rules directory and can be later invoked using the `run-scalafix-rule` tool.
+           |When a rule with the same name already exists, it will be overwritten. This is useful if you want to update 
+           |the rule implementation.
+           |""".stripMargin,
+        schema,
+      ),
+      withErrorHandling { (_, arguments) =>
+        import scala.meta._
+        val ruleImplementation = arguments.getAs[String]("ruleImplementation")
+        val description = arguments.getAs[String]("description")
+        val sampleCode = arguments.getOptAs[String]("sampleCode")
+        def helper = {
+          sampleCode match {
+            case Some(value) =>
+              value.parse[Stat] match {
+                case Parsed.Success(value) => value.structure
+                case Parsed.Error(_, _, _) =>
+                  "Provide a valid sample code to get a better error message"
+              }
+            case None => "Provide a sample code to get a better error message"
+          }
+        }
+        def errorMessage(exception: String) = {
+          s"Error: ${exception}\nSample code structure: ${helper}"
+        }
+        val runOn = arguments.getPathOpt("fileToRunOn")
+        val modules =
+          arguments
+            .getOptAs[JList[String]]("targets")
+            .map(_.asScala.toList)
+            .getOrElse(Nil) match {
+            case Nil =>
+              val targetFile = runOn.orElse(focusedDocument())
+              targetFile
+                .flatMap(
+                  buildTargets
+                    .inverseSources(_)
+                    .flatMap(buildTargets.scalaTarget(_))
+                    .map(_.displayName)
+                )
+                .toList
+            case targets => targets
+          }
+        val resultingFuture =
+          scalafixLlmRuleProvider.runOnAllTargets(
+            ruleImplementation,
+            description,
+            modules,
+            runOn.toList,
+          )
+        resultingFuture.map {
+          case Right(res) =>
+            new CallToolResult(
+              createContent(
+                s"Created and ran Scalafix rule ${res.ruleName} successfully"
+              ),
+              false,
+            )
+          case Left(error) =>
+            new CallToolResult(
+              createContent(errorMessage(error)),
+              true,
+            )
+        }.toMono
+      },
+    )
+  }
+
+  private def createRunScalafixRuleTool(): AsyncToolSpecification = {
+    val schema =
+      """{
+        |  "type": "object",
+        |  "properties": {
+        |    "ruleName": {
+        |      "type": "string",
+        |      "description": "The name of the scalafix rule to run. Should be one of the rules from the list-scalafix-rules tool output."
+        |    },
+        |    "fileToRunOn": {
+        |      "type": "string",
+        |      "description": "File to run it all, if empty will run on all files"
+        |    }
+        |  },
+        |  "required": ["ruleName"]
+        |} 
+        |""".stripMargin
+    new AsyncToolSpecification(
+      new Tool(
+        "run-scalafix-rule",
+        "Run a specific previously existing Scalafix rule (from curated rules or previously created rules) on the focused file or all files",
+        schema,
+      ),
+      withErrorHandling { (_, arguments) =>
+        val ruleName = arguments.getAs[String]("ruleName")
+        val path = arguments.getPathOpt("fileToRunOn")
+        val runResult = path match {
+          case Some(path) =>
+            scalafixLlmRuleProvider.runScalafixRule(ruleName, path)
+          case None =>
+            scalafixLlmRuleProvider.runScalafixRuleForAllTargets(ruleName)
+        }
+        runResult
+          .map { _ =>
+            new CallToolResult(
+              createContent("Scalafix rule run successfully"),
+              false,
+            )
+          }
+          .recover { case error =>
+            new CallToolResult(createContent(error.getMessage), true)
+          }
+          .toMono
+      },
+    )
+  }
+
+  private def createListScalafixRulesTool(): AsyncToolSpecification = {
+    val schema =
+      """{
+        |  "type": "object",
+        |  "properties": { }
+        |}
+        |""".stripMargin
+    new AsyncToolSpecification(
+      new Tool(
+        "list-scalafix-rules",
+        "List currently available scalafix rules from .metals/rules directory. They were previously created by the `run-scalafix-rule` tool.",
+        schema,
+      ),
+      withErrorHandling { (_, _) =>
+        Future {
+          val allRules = ScalafixLlmRuleProvider.allRules(projectPath)
+          val content =
+            allRules.toList.sortBy(_._1).map { case (ruleName, description) =>
+              s"- $ruleName: $description"
+            }
+          new CallToolResult(
+            createContent(
+              s"Available scalafix rules:\n${content.mkString("\n")}"
+            ),
+            false,
+          )
+        }.toMono
       },
     )
   }
@@ -911,16 +1177,41 @@ class MetalsMcpServer(
           )
       }
 
+    def getAsList[T](key: String)(implicit ct: ClassTag[T]): List[T] =
+      try {
+        arguments.get(key) match {
+          case null => throw new MissingArgumentException(key)
+          case value: String =>
+            objectMapper
+              .readValue(value, classOf[JList[T]])
+              .asScala
+              .toList
+          case value: JList[_] =>
+            value.asScala.collect { case value: T => value }.toList
+        }
+      } catch {
+        case _: MissingArgumentException =>
+          throw new MissingArgumentException(key)
+        case _: Exception =>
+          throw new IncorrectArgumentTypeException(
+            key,
+            s"Array[${ct.runtimeClass.getSimpleName}]",
+          )
+      }
+
     /**
      * Like getOptAs, but returns None if the value is an empty string (after trimming).
      */
     def getOptNoEmptyString(key: String): Option[String] =
       getOptAs[String](key).map(_.trim).filter(_.nonEmpty)
 
-    def getFileInFocusOpt: Option[AbsolutePath] =
-      getOptAs[String]("fileInFocus")
+    def getPathOpt(key: String): Option[AbsolutePath] =
+      getOptAs[String](key)
         .filter(_.nonEmpty)
         .map(path => AbsolutePath(Path.of(path))(projectPath))
+
+    def getFileInFocusOpt: Option[AbsolutePath] =
+      getPathOpt("fileInFocus")
         .orElse { focusedDocument() }
 
     def getFileInFocus: AbsolutePath =
@@ -951,6 +1242,12 @@ class MissingArgumentException(key: String)
 
 class IncorrectArgumentTypeException(key: String, expected: String)
     extends Exception(s"Incorrect argument type for $key, expected: $expected")
+    with IncorrectArgumentException
+
+class InvalidSymbolTypeException(invalid: Seq[String], validTypes: String)
+    extends Exception(
+      s"Invalid symbol types: ${invalid.mkString(", ")}. Valid types are: $validTypes"
+    )
     with IncorrectArgumentException
 
 object MissingFileInFocusException

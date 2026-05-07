@@ -1,6 +1,7 @@
 package scala.meta.internal.metals
 
 import java.nio.charset.Charset
+import java.nio.file.Files
 
 import scala.meta.internal.io.PlatformFileIO
 import scala.meta.internal.metals.MetalsEnrichments._
@@ -64,8 +65,14 @@ final class FileSystemSemanticdbs(
               optScalaVersion,
               charset,
               fingerprints,
-              semanticdbRelativePath =>
-                findSemanticDb(semanticdbRelativePath, targetroot, file, ws),
+              semanticdbRelativePath => {
+                findSemanticDb(semanticdbRelativePath, targetroot, file, ws)
+                  .orElse(
+                    targetroot.alternativeTargetRoot.flatMap(
+                      findSemanticDb(semanticdbRelativePath, _, file, ws)
+                    )
+                  )
+              },
               (warn: String) => scribe.warn(warn),
             )
           } catch {
@@ -89,11 +96,14 @@ final class FileSystemSemanticdbs(
       workspace: AbsolutePath,
   ): Option[FoundSemanticDbPath] = {
     val semanticdbpath = targetroot.resolve(semanticdbRelativePath)
-    if (semanticdbpath.isFile) Some(FoundSemanticDbPath(semanticdbpath, None))
-    else if (targetroot.isFile && targetroot.toString().endsWith(".jar")) {
+    if (semanticdbpath.isFile && semanticdbpath.exists)
+      Some(FoundSemanticDbPath(semanticdbpath, None))
+    else if (targetroot.isFile && targetroot.isJar) {
       val jarFS = PlatformFileIO.newJarFileSystem(targetroot, create = false)
       val jPath = jarFS.getPath("/" + semanticdbRelativePath.toString())
-      Some(FoundSemanticDbPath(AbsolutePath(jPath), None))
+      if (Files.exists(jPath))
+        Some(FoundSemanticDbPath(AbsolutePath(jPath), None))
+      else None
     } else {
       // needed in case sources are symlinked,
       val result = for {
