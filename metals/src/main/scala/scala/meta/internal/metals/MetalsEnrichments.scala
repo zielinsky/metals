@@ -944,11 +944,20 @@ object MetalsEnrichments
           DiagnosticDataDeserializer,
         )
         .create()
-      decodeJson(
-        d.getData(),
-        classOf[Either[l.TextEdit, b.ScalaDiagnostic]],
-        Some(gson),
-      )
+      d.getData() match {
+        case o: JsonObject =>
+          decodeJson(
+            o,
+            classOf[Either[l.TextEdit, b.ScalaDiagnostic]],
+            Some(gson),
+          )
+        case other =>
+          if (other != null)
+            scribe.warn(
+              s"Unexpected data type: ${d.getData().getClass().getName()}, data: ${d.getData()}"
+            )
+          None
+      }
     }
   }
 

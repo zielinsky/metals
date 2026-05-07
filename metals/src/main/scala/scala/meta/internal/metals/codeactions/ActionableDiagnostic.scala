@@ -75,6 +75,17 @@ class ActionableDiagnostic() extends CodeAction {
       .flatten
       .sorted
 
-    Future.successful(codeActions)
+    val scala3CodeActions = params
+      .getContext()
+      .getDiagnostics()
+      .asScala
+      .toSeq
+      .flatMap {
+        case ScalacDiagnostic.Scala3Diagnostic(actions) =>
+          actions
+        case _ => Nil
+      }
+
+    Future.successful(codeActions ++ scala3CodeActions)
   }
 }
