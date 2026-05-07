@@ -483,15 +483,6 @@ object MetalsEnrichments
     def isJarFileSystem: Boolean =
       path.toNIO.getFileSystem().provider().getScheme().equals("jar")
 
-    def openJar: Option[AbsolutePath] = if (path.isJar) {
-      Some(
-        AbsolutePath(
-          m.internal.io.PlatformFileIO
-            .newJarFileSystem(path, create = false)
-            .getPath("/")
-        )
-      )
-    } else None
     def isInReadonlyDirectory(workspace: AbsolutePath): Boolean =
       path.toNIO.startsWith(
         workspace.resolve(Directories.readonly).toNIO
@@ -636,15 +627,14 @@ object MetalsEnrichments
      *
      * Example: `/path/hello.jar -> /path/_semanticdb/hello`
      */
-    def resolveIfJar: AbsolutePath = {
+    def alternativeTargetRoot: Option[AbsolutePath] = {
       if (path.isJar) {
-        path
-        // val filename = path.toNIO.getFileName.toString
-        // val filename0 = filename.stripSuffix(".jar").stripSuffix(".srcjar")
-        // val targetroot = path.parent.resolve(s"_semanticdb/$filename0")
-        // targetroot
+        val filename = path.toNIO.getFileName.toString
+        val filename0 = filename.stripSuffix(".jar").stripSuffix(".srcjar")
+        val targetroot = path.parent.resolve(s"_semanticdb/$filename0")
+        Some(targetroot)
       } else {
-        path
+        None
       }
     }
 
