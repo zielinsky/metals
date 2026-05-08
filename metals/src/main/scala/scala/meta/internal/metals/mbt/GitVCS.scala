@@ -150,7 +150,7 @@ object GitVCS {
         }
       case _ => // Ignore other lines, should not happen
     }
-    val command = List("git", "ls-files", "--stage")
+    val command = List("git", "ls-files", "--stage", "--recurse-submodules")
     val exitCode = Process(command, cwd = workspace.toFile).!(logger)
     if (exitCode != 0) {
       throw new GitError(workspace, command.mkString(" "), exitCode)
