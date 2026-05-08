@@ -3,6 +3,7 @@ package scala.meta.internal.metals.mbt.importer
 import java.nio.file.Files
 import java.nio.file.Path
 
+import scala.collection.concurrent.TrieMap
 import scala.util.Try
 
 import scala.meta.internal.metals.MetalsEnrichments._
@@ -27,6 +28,7 @@ object BazelMavenJsonImporter {
   def importMaven(
       projectDir: AbsolutePath,
       outputBase: Option[Path],
+      repositoryName: String,
   ): Seq[MbtDependencyModule] = {
     val mavenInstallPaths =
       findAllMavenInstallJson(projectDir)
@@ -38,10 +40,15 @@ object BazelMavenJsonImporter {
       Seq.empty[MbtDependencyModule]
     } else {
       val allModules = mavenInstallPaths.flatMap { path =>
-        scribe.debug(s"Processing: $path")
+        scribe.info(s"bazel-mbt: processing maven lock file: $path")
         val content = path.readText
         val json = gson.fromJson(content, classOf[JsonObject])
-        extractArtifacts(json, outputBase.map(AbsolutePath.apply), projectDir)
+        extractArtifacts(
+          json,
+          outputBase.map(AbsolutePath.apply),
+          projectDir,
+          repositoryName,
+        )
       }
 
       allModules
@@ -92,7 +99,7 @@ object BazelMavenJsonImporter {
       (candidates ++ patternMatches ++ lockFilePaths).distinct
         .filter(_.exists)
 
-    scribe.debug(
+    scribe.info(
       s"Found maven_install.json files: ${allCandidates.mkString(", ")}"
     )
 
@@ -101,7 +108,8 @@ object BazelMavenJsonImporter {
 
   /**
    * Parse MODULE.bazel and WORKSPACE files to find lock_file parameter
-   * in maven.install or maven_install calls.
+   * in maven.install or maven_install calls. Also searches through
+   * included files if not found in the main config files.
    *
    * Examples of patterns matched:
    * - maven.install(lock_file = "//:maven_install.json")
@@ -112,44 +120,103 @@ object BazelMavenJsonImporter {
       projectDir: AbsolutePath
   ): Seq[AbsolutePath] = {
     val configFiles = possibleConfigFiles(projectDir)
-    configFiles.flatMap { configFile =>
+    val loadedFile = TrieMap.empty[AbsolutePath, String]
+    // First, try to find in main config files
+    val fromMainConfigs = configFiles.flatMap { configFile =>
       Try {
         val content = configFile.readText
+        loadedFile.put(configFile, content)
         extractLockFilePaths(content, projectDir)
       }.getOrElse(Seq.empty)
+    }
+
+    if (fromMainConfigs.nonEmpty) fromMainConfigs
+    // If not found, search through includes
+    else {
+      configFiles.flatMap { configFile =>
+        Try {
+          val content = loadedFile.getOrElse(configFile, configFile.readText)
+          val includedFiles = extractIncludePaths(content, projectDir)
+          includedFiles.flatMap { includedFile =>
+            Try {
+              val includedContent = includedFile.readText
+              extractLockFilePaths(includedContent, projectDir)
+            }.getOrElse(Seq.empty)
+          }
+        }.getOrElse(Seq.empty)
+      }
     }
   }
 
   /**
    * Tries to extract the repository name from the Bazel config files.
+   * If maven.install is not found in the main config files, it will also
+   * search through included files.
    *
    * @return the repository name, or "maven" if not found
    */
-  private def extractRepositoryNameFromBazelConfig(
+  def extractRepositoryNameFromBazelConfig(
       projectDir: AbsolutePath
   ): String = {
     val namePattern = """name\s*=\s*"([^"]+)"""".r
     val configFiles = possibleConfigFiles(projectDir)
 
-    configFiles
-      .flatMap { configFile =>
-        val content = configFile.readText
-        val indexOfMavenInstall = content.indexOf("maven_install") match {
-          case -1 => content.indexOf("maven.install")
-          case index => index
-        }
-        if (indexOfMavenInstall == -1) None
-        else
-          namePattern.findFirstIn(
-            content.substring(indexOfMavenInstall)
-          ) match {
-            case Some(name) => Some(name)
-            case None => None
-          }
-
+    def extractFromContent(content: String): Option[String] = {
+      val indexOfMavenInstall = content.indexOf("maven_install") match {
+        case -1 => content.indexOf("maven.install")
+        case index => index
       }
-      .headOption
-      .getOrElse("maven")
+      if (indexOfMavenInstall == -1) None
+      else
+        namePattern
+          .findAllMatchIn(content.substring(indexOfMavenInstall))
+          .map(_.group(1))
+          .headOption
+    }
+
+    val loadedFile = TrieMap.empty[AbsolutePath, String]
+    // First, try to find in main config files
+    val fromMainConfigs = configFiles.flatMap { configFile =>
+      val content = configFile.readText
+      loadedFile.put(configFile, content)
+      extractFromContent(content)
+    }.headOption
+
+    fromMainConfigs.getOrElse {
+      // If not found, search through includes
+      val fromIncludes = configFiles.flatMap { configFile =>
+        val content = loadedFile.getOrElse(configFile, configFile.readText)
+        val includedFiles = extractIncludePaths(content, projectDir)
+        includedFiles.flatMap { includedFile =>
+          Try(includedFile.readText).toOption.flatMap(extractFromContent)
+        }
+      }.headOption
+
+      fromIncludes.getOrElse("maven")
+    }
+  }
+
+  /**
+   * Extract include paths from Bazel configuration content.
+   * Handles patterns like:
+   * - include("//path:file.bazel")
+   * - include("//:file.bazel")
+   * - include("file.bazel")
+   */
+  private def extractIncludePaths(
+      content: String,
+      projectDir: AbsolutePath,
+  ): Seq[AbsolutePath] = {
+    val includePattern = """include\s*\(\s*"([^"]+)"\s*\)""".r
+
+    includePattern
+      .findAllMatchIn(content)
+      .flatMap { m =>
+        val includePath = m.group(1)
+        bazelLabelToPath(includePath, projectDir)
+      }
+      .filter(_.exists)
+      .toSeq
   }
 
   private def possibleConfigFiles(
@@ -258,8 +325,8 @@ object BazelMavenJsonImporter {
       json: JsonObject,
       outputBase: Option[AbsolutePath],
       projectDir: AbsolutePath,
+      repositoryName: String,
   ): Seq[MbtDependencyModule] = {
-    val repositoryName = extractRepositoryNameFromBazelConfig(projectDir)
     scribe.debug(s"Using repository name: $repositoryName")
     val externalDir = outputBase.map(_.resolve("external"))
 

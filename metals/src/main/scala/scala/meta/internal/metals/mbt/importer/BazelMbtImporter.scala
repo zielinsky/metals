@@ -49,8 +49,11 @@ abstract class BazelMbtImporter(
     val patterns = BazelProjectViewTargets.patterns(projectRoot)
     for {
       outputBase <- queryOutputBase()
+      repositoryName = BazelMavenJsonImporter
+        .extractRepositoryNameFromBazelConfig(projectRoot)
+      _ = scribe.info(s"bazel-mbt: found repository name: $repositoryName")
       dependencyModules = BazelMavenJsonImporter
-        .importMaven(projectRoot, outputBase)
+        .importMaven(projectRoot, outputBase, repositoryName)
       targets <- runRuleTargetsQuery(patterns)
       _ = scribe.info(s"bazel-mbt: found ${targets.size} targets")
       srcs <- querySrcs(targets)
@@ -61,6 +64,7 @@ abstract class BazelMbtImporter(
       externalDepModules = matchExternalDepsToModules(
         externalDeps,
         dependencyModules,
+        repositoryName,
       )
       scalaVersionFromDeps <- queryScalaVersionFromDeps()
       effectiveScalaVersion <- scalaVersionFromDeps match {
@@ -208,9 +212,10 @@ abstract class BazelMbtImporter(
   private def matchExternalDepsToModules(
       externalDeps: Map[String, List[String]],
       dependencyModules: Seq[MbtDependencyModule],
+      repositoryName: String,
   ): Map[String, List[String]] = {
     val modulesByBazelLabel = dependencyModules.flatMap { module =>
-      bazelLabelFromModuleId(module.id).map(_ -> module.id)
+      bazelLabelFromModuleId(module.id, repositoryName).map(_ -> module.id)
     }.toMap
 
     externalDeps.map { case (target, deps) =>
@@ -223,14 +228,17 @@ abstract class BazelMbtImporter(
     }
   }
 
-  private def bazelLabelFromModuleId(moduleId: String): Option[String] = {
+  private def bazelLabelFromModuleId(
+      moduleId: String,
+      repositoryName: String,
+  ): Option[String] = {
     val parts = moduleId.split(":")
     if (parts.length >= 2) {
       val groupId = parts(0)
       val artifactId = parts(1)
       val sanitizedGroup = groupId.replace('.', '_').replace('-', '_')
       val sanitizedArtifact = artifactId.replace('.', '_').replace('-', '_')
-      Some(s"@maven//:${sanitizedGroup}_$sanitizedArtifact")
+      Some(s"@$repositoryName//:${sanitizedGroup}_$sanitizedArtifact")
     } else None
   }
 
