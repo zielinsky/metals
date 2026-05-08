@@ -1,17 +1,33 @@
 package scala.meta.internal.builds
 
+import scala.concurrent.ExecutionContext
+
 import scala.meta.internal.metals.Embedded
 import scala.meta.internal.metals.JavaBinary
 import scala.meta.internal.metals.MetalsEnrichments._
+import scala.meta.internal.metals.Tables
 import scala.meta.internal.metals.UserConfiguration
+import scala.meta.internal.metals.clients.language.MetalsLanguageClient
+import scala.meta.internal.metals.mbt.importer.BazelMbtImporter
 import scala.meta.io.AbsolutePath
 
 import coursierapi.Dependency
 
 case class BazelBuildTool(
     userConfig: () => UserConfiguration,
-    projectRoot: AbsolutePath,
-) extends BuildTool
+    override val projectRoot: AbsolutePath,
+    shellRunner: ShellRunner,
+    ec: ExecutionContext,
+    languageClient: Option[MetalsLanguageClient] = None,
+    tables: Option[Tables] = None,
+) extends BazelMbtImporter(
+      projectRoot,
+      shellRunner,
+      userConfig,
+      languageClient,
+      tables,
+    )(ec)
+    with BuildTool
     with BuildServerProvider
     with VersionRecommendation {
 

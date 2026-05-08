@@ -39,6 +39,14 @@ abstract class BaseWorkDoneProgress extends ProgressBars {
   ): (Task, Future[Token])
 
   def endProgress(token: Future[Token]): Future[Unit]
+
+  def trackFuture[T](
+      message: String,
+      value: Future[T],
+      onCancel: Option[() => Unit] = None,
+      showTimer: Boolean = true,
+      metricName: Option[(String, MonitoringClient)] = None,
+  )(implicit ec: ExecutionContext): Future[T]
 }
 
 case class ProgressTimeout(timeout: FiniteDuration, onTimeout: () => Unit) {
@@ -73,6 +81,13 @@ object EmptyWorkDoneProgress extends BaseWorkDoneProgress {
     Task.empty(Time.system),
     Future.successful(messages.Either.forLeft[String, Integer]("")),
   )
+  override def trackFuture[T](
+      message: String,
+      value: Future[T],
+      onCancel: Option[() => Unit],
+      showTimer: Boolean,
+      metricName: Option[(String, MonitoringClient)],
+  )(implicit ec: ExecutionContext): Future[T] = value
 }
 case class Task(
     onCancel: Option[() => Unit],

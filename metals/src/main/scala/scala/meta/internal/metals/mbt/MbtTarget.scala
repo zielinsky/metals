@@ -18,7 +18,8 @@ case class MbtTarget(
     id: bsp4j.BuildTargetIdentifier,
     sources: Seq[String],
     globMatchers: Seq[MbtGlobMatcher],
-    compilerOptions: Seq[String],
+    scalacOptions: Seq[String],
+    javacOptions: Seq[String],
     dependencyModules: Seq[MbtDependencyModule],
     scalaVersion: Option[String] = None,
     javaHome: Option[String] = None,
@@ -104,7 +105,7 @@ case class MbtTarget(
   def scalacOptionsItem(workspace: AbsolutePath): bsp4j.ScalacOptionsItem =
     new bsp4j.ScalacOptionsItem(
       id,
-      compilerOptions.asJava,
+      scalacOptions.asJava,
       classpath,
       emptyClassDirectory(workspace).toURI.toString(),
     )
@@ -112,7 +113,7 @@ case class MbtTarget(
   def javacOptionsItem(workspace: AbsolutePath): bsp4j.JavacOptionsItem =
     new bsp4j.JavacOptionsItem(
       id,
-      compilerOptions.asJava,
+      javacOptions.asJava,
       classpath,
       emptyClassDirectory(workspace).toURI.toString(),
     )

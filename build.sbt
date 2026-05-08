@@ -159,8 +159,9 @@ commands ++= Seq(
       s
   },
   Command.command("quick-publish-local") { s =>
+    val versionValue = Project.extract(s).get(ThisBuild / version)
     val publishMtags = V.quickPublishScalaVersions.foldLeft(s) { case (st, v) =>
-      runMtagsPublishLocal(st, v, localSnapshotVersion)
+      runMtagsPublishLocal(st, v, versionValue)
     }
     "interfaces/publishLocal" ::
       "jsemanticdb/publishLocal" ::

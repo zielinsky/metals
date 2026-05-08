@@ -79,6 +79,9 @@ class TestingClient(workspace: AbsolutePath, val buffers: Buffers)
   var selectBspServer: Seq[MessageActionItem] => MessageActionItem = { _ =>
     null
   }
+  var selectedServer: MessageActionItem = ChooseBuildServer.bsp
+  var chooseBazelMbtNamespaceMode: MessageActionItem =
+    BazelMbtNamespaceChoice.packages
   var chooseWorkspaceFolder: Seq[MessageActionItem] => MessageActionItem =
     _.head
   var chooseBuildTool: Seq[MessageActionItem] => MessageActionItem = {
@@ -403,6 +406,8 @@ class TestingClient(workspace: AbsolutePath, val buffers: Buffers)
             selectBspServer(params.getActions.asScala.toSeq)
           } else if (params.getMessage == ChooseBuildTool.message) {
             chooseBuildTool(params.getActions.asScala.toSeq)
+          } else if (BazelMbtNamespaceChoice.params() == params) {
+            chooseBazelMbtNamespaceMode
           } else if (MissingScalafmtConf.isCreateScalafmtConf(params)) {
             createScalaFmtConf
           } else if (params.getMessage() == MainClass.message) {
@@ -411,6 +416,8 @@ class TestingClient(workspace: AbsolutePath, val buffers: Buffers)
             switchBuildTool
           } else if (ImportScalaScript.params() == params) {
             importScalaCliScript
+          } else if (ChooseBuildServer.params("bazel") == params) {
+            selectedServer
           } else if (ResetWorkspace.params() == params) {
             resetWorkspace
           } else if (OldBloopVersionRunning.params() == params) {

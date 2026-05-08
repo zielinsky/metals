@@ -5,8 +5,13 @@ import java.nio.file.Files
 
 import scala.concurrent.ExecutionContext
 
+import scala.meta.internal.builds.BazelProjectViewTargets
 import scala.meta.internal.builds.BuildTools
+import scala.meta.internal.builds.ShellRunner
+import scala.meta.internal.metals.EmptyWorkDoneProgress
+import scala.meta.internal.metals.Time
 import scala.meta.internal.metals.UserConfiguration
+import scala.meta.internal.metals.mbt.importer.BazelMbtImporter
 import scala.meta.internal.metals.mbt.importer.ScriptMbtImporter
 import scala.meta.io.AbsolutePath
 
@@ -23,6 +28,12 @@ class MbtImporterDiscoverySuite extends BaseSuite {
       userConfig = () => UserConfiguration(),
       explicitChoiceMade = () => false,
       charset = StandardCharsets.UTF_8,
+      shellRunner = new ShellRunner(
+        Time.system,
+        EmptyWorkDoneProgress,
+        () => UserConfiguration(),
+      ),
+      ec = ec,
     )
 
   private def write(path: AbsolutePath, content: String = ""): Unit = {
@@ -37,6 +48,8 @@ class MbtImporterDiscoverySuite extends BaseSuite {
     val importers = buildTools(workspace).mbtImporters(
       shellRunner = null,
       userConfig = () => UserConfiguration(),
+      languageClient = None,
+      tables = None,
     )
     assertEquals(importers.length, 1)
     assert(importers.head.isInstanceOf[ScriptMbtImporter])
@@ -50,6 +63,8 @@ class MbtImporterDiscoverySuite extends BaseSuite {
     val importers = buildTools(workspace).mbtImporters(
       shellRunner = null,
       userConfig = () => UserConfiguration(),
+      languageClient = None,
+      tables = None,
     )
     assertEquals(importers.length, 1)
     assert(importers.head.isInstanceOf[ScriptMbtImporter])
@@ -65,6 +80,8 @@ class MbtImporterDiscoverySuite extends BaseSuite {
     val importers = buildTools(workspace).mbtImporters(
       shellRunner = null,
       userConfig = () => UserConfiguration(),
+      languageClient = None,
+      tables = None,
     )
     val scriptImporters = importers.collect { case s: ScriptMbtImporter => s }
     assertEquals(scriptImporters.length, 3)
@@ -83,6 +100,8 @@ class MbtImporterDiscoverySuite extends BaseSuite {
     val importers = buildTools(workspace).mbtImporters(
       shellRunner = null,
       userConfig = () => UserConfiguration(),
+      languageClient = None,
+      tables = None,
     )
     val scriptImporters = importers.collect { case s: ScriptMbtImporter => s }
     assertEquals(scriptImporters.length, 0)
@@ -94,6 +113,8 @@ class MbtImporterDiscoverySuite extends BaseSuite {
     val importers = buildTools(workspace).mbtImporters(
       shellRunner = null,
       userConfig = () => UserConfiguration(),
+      languageClient = None,
+      tables = None,
     )
     assertEquals(importers.length, 0)
   }
@@ -107,5 +128,42 @@ class MbtImporterDiscoverySuite extends BaseSuite {
   test("hasMbtImporters-false-for-empty-workspace") {
     val workspace = AbsolutePath(Files.createTempDirectory("mbt-has"))
     assert(!buildTools(workspace).hasMbtImporters)
+  }
+
+  test("discover-bazel-importer") {
+    val workspace = AbsolutePath(Files.createTempDirectory("mbt-bazel"))
+    write(workspace.resolve("WORKSPACE"))
+
+    val importers = buildTools(workspace).mbtImporters(
+      shellRunner = null,
+      userConfig = () => UserConfiguration(),
+      languageClient = None,
+      tables = None,
+    )
+    assertEquals(importers.length, 1)
+    assert(importers.head.isInstanceOf[BazelMbtImporter])
+    assertEquals(importers.head.name, "bazel")
+  }
+
+  test("hasMbtImporters-true-for-bazel-workspace") {
+    val workspace = AbsolutePath(Files.createTempDirectory("mbt-bazel"))
+    write(workspace.resolve("WORKSPACE"), "")
+    assert(buildTools(workspace).hasMbtImporters)
+  }
+
+  test("bazel-project-view-target-patterns") {
+    val workspace = AbsolutePath(Files.createTempDirectory("mbt-bazel-pv"))
+    write(workspace.resolve("WORKSPACE"))
+    write(
+      workspace.resolve(".bazelproject"),
+      """targets:
+        |    //apps/...
+        |build_manual_targets: false
+        |""".stripMargin,
+    )
+    assertEquals(
+      BazelProjectViewTargets.patterns(workspace),
+      List("//apps/..."),
+    )
   }
 }

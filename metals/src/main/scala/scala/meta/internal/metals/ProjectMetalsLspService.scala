@@ -96,12 +96,18 @@ class ProjectMetalsLspService(
     ExecutionContext.fromExecutor(Executors.newFixedThreadPool(10))
   import serverInputs._
 
+  override val shellRunner: ShellRunner = register {
+    new ShellRunner(time, workDoneProgress, () => userConfig)
+  }
+
   protected val buildTools: BuildTools = new BuildTools(
     folder,
     bspGlobalDirectories,
     () => userConfig,
     () => tables.buildServers.selectedServer().nonEmpty,
     charset,
+    shellRunner,
+    ec,
   )
 
   override def indexer: Indexer = connectionProvider
@@ -131,10 +137,6 @@ class ProjectMetalsLspService(
       // In production, rely on file watching notifications from the LSP client (VS Code, etc). Starting a file watcher
       // on every build sync ends up being expensive in large projects.
       NoopFileWatcher
-
-  override val shellRunner: ShellRunner = register {
-    new ShellRunner(time, workDoneProgress, () => userConfig)
-  }
 
   override protected def fileDecoderProvider: FileDecoderProvider =
     new FileDecoderProvider(
@@ -402,7 +404,12 @@ class ProjectMetalsLspService(
     } else if (
       bspSession.exists(s => MbtBuildServer.isMbtServer(s.main.name))
     ) {
-      val mbtImporters = buildTools.mbtImporters(shellRunner, () => userConfig)
+      val mbtImporters = buildTools.mbtImporters(
+        shellRunner,
+        () => userConfig,
+        Some(languageClient),
+        Some(tables),
+      )
       if (paths.exists(path => mbtImporters.exists(_.isBuildRelated(path))))
         connectionProvider.runMbtReimport(mbtImporters)
       else
