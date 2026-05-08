@@ -390,7 +390,7 @@ class ProjectMetalsLspService(
       bspSession.exists(s => MbtBuildServer.isMbtServer(s.main.name))
     ) {
       val mbtImporters = buildTools.mbtImporters(shellRunner, () => userConfig)
-      if (paths.exists(path => mbtImporters.exists(_.isBuildRelated(path))))
+      if (paths.exists(path => mbtImporters.exists(_.isWatchedFile(path))))
         connectionProvider.runMbtReimport(mbtImporters)
       else
         Future.unit

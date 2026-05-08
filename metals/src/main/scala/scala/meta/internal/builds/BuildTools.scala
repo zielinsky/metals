@@ -283,25 +283,28 @@ final class BuildTools(
    */
   def hasMbtImporters: Boolean =
     loadSupported().exists(_.isInstanceOf[MbtImportProvider]) ||
-      workspace.list.exists(f =>
-        ScriptMbtImporter.scriptExtensions.exists(f.filename.endsWith(_))
-      )
+      scriptImporterPaths.nonEmpty
 
   def mbtImporters(
       shellRunner: ShellRunner,
       userConfig: () => UserConfiguration,
   )(implicit ec: ExecutionContext): List[MbtImportProvider] = {
-    val buf = List.newBuilder[MbtImportProvider]
-    buf ++= loadSupported().collect { case p: MbtImportProvider => p }
+    scriptImporterPaths match {
+      case Nil =>
+        loadSupported().collect { case p: MbtImportProvider => p }
+      case scripts =>
+        scripts.map(script =>
+          new ScriptMbtImporter(script, shellRunner, userConfig)
+        )
+    }
+  }
+
+  private def scriptImporterPaths: List[AbsolutePath] =
     workspace.list
       .filter(f =>
         ScriptMbtImporter.scriptExtensions.exists(f.filename.endsWith(_))
       )
-      .foreach(script =>
-        buf += new ScriptMbtImporter(script, shellRunner, userConfig)
-      )
-    buf.result()
-  }
+      .toList
 
   def initialize(): Set[BuildTool] = {
     lastDetectedBuildTools
