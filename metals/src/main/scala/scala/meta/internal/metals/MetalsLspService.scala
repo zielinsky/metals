@@ -219,7 +219,7 @@ abstract class MetalsLspService(
     new FileChanges(buildTargets, () => folder, () => userConfig)
 
   val buildTargetClasses =
-    new BuildTargetClasses(buildTargets)
+    new BuildTargetClasses(buildTargets, () => compilers, definitionIndex)
 
   val scalaVersionSelector = new ScalaVersionSelector(
     () => userConfig,
@@ -657,6 +657,7 @@ abstract class MetalsLspService(
       referencesProvider,
       implementationProvider,
       testProvider,
+      buildTargetClasses,
     ),
     buildTargets,
     folder,
@@ -703,6 +704,7 @@ abstract class MetalsLspService(
     interactiveSemanticdbs,
     tables,
     buildHasErrors,
+    statusBar,
   )
 
   protected val codeActionProvider: CodeActionProvider = new CodeActionProvider(
@@ -825,12 +827,12 @@ abstract class MetalsLspService(
                   } else {
                     Future.unit
                   }
-                }.flatten,
+                },
                 Future(workspaceSymbols.indexClasspath()),
                 Future(formattingProvider.load()),
               )
             )
-      } yield ()
+      } yield {}
     } else Future.unit
 
   def onShutdown(): Unit = {
@@ -1707,7 +1709,7 @@ abstract class MetalsLspService(
   def cascadeCompile(): Future[Unit] =
     compilations.cascadeCompileFiles(buffers.open.toSeq)
 
-  def cleanCompile(): Future[Unit] = compilations.recompileAll()
+  def cleanCompile(): Future[Unit] = compilations.clean(recompile = true)
 
   def compileTarget(target: b.BuildTargetIdentifier): Future[b.CompileResult] =
     compilations.compileTarget(target)
@@ -1789,8 +1791,36 @@ abstract class MetalsLspService(
       .asJavaObject
   }
 
+  def copyFQNOfSymbol(
+      params: l.TextDocumentPositionParams
+  ): Future[Option[String]] = {
+    Future.successful {
+      val path = params.getTextDocument.getUri.toAbsolutePath
+      val dialect = scalaVersionSelector.getDialect(path)
+      val pos = params.getPosition
+      for {
+        sym <- definitionProvider
+          .symbolOccurrence(path, pos)
+          .map { case (occ, _) =>
+            occ.symbol
+          }
+          .orElse {
+            mtags
+              .index(path, dialect)
+              .occurrences
+              .filter(_.range.exists(_.encloses(pos)))
+              .map(_.symbol)
+              .headOption
+          }
+      } yield sym.symbolToFullyQualifiedName
+    }
+  }
+
   def analyzeStackTrace(content: String): Option[ExecuteCommandParams] =
     stacktraceAnalyzer.analyzeCommand(content)
+
+  def resolveStacktraceLocation(stacktraceLine: String): Option[Location] =
+    stacktraceAnalyzer.resolveStacktraceLocationCommand(stacktraceLine)
 
   def findBuildTargetByDisplayName(target: String): Option[b.BuildTarget] =
     buildTargets.findByDisplayName(target)
@@ -1868,6 +1898,7 @@ abstract class MetalsLspService(
     () => userConfig,
     folder,
     buildTargetClassesFinder,
+    testProvider,
   )
 
   protected val debugProvider: DebugProvider = register(
@@ -1891,9 +1922,34 @@ abstract class MetalsLspService(
   )
   buildClient.registerLogForwarder(debugProvider)
 
+  private def afterCompilationFinished[T](
+      params: DebugDiscoveryParams
+  )(action: DebugDiscoveryParams => Future[T]): Future[T] = {
+    val path = Option(params.path).map(_.toAbsolutePath)
+    val buildTarget = path
+      .flatMap(buildTargets.inverseSources(_))
+      .orElse {
+        Option(params.buildTarget)
+          .flatMap(buildTargets.findByDisplayName)
+          .map(_.getId())
+      }
+
+    buildTarget match {
+      case Some(target) =>
+        compilations
+          .compileTarget(target)
+          .flatMap(_ => action(params))
+      case None =>
+        action(params)
+    }
+  }
+
   def debugDiscovery(params: DebugDiscoveryParams): Future[DebugSession] =
-    debugDiscovery
-      .debugDiscovery(params)
+    afterCompilationFinished(params)(debugDiscovery.debugDiscovery)
+      .flatMap(debugProvider.asSession)
+
+  def runClosest(params: DebugDiscoveryParams): Future[DebugSession] =
+    afterCompilationFinished(params)(debugDiscovery.debugDiscovery)
       .flatMap(debugProvider.asSession)
 
   def createDebugSession(
@@ -1926,7 +1982,9 @@ abstract class MetalsLspService(
   def discoverMainClasses(
       unresolvedParams: DebugDiscoveryParams
   ): Future[b.DebugSessionParams] =
-    debugDiscovery.runCommandDiscovery(unresolvedParams)
+    afterCompilationFinished(unresolvedParams)(
+      debugDiscovery.runCommandDiscovery
+    )
 
   def supportsBuildTarget(
       target: b.BuildTargetIdentifier
@@ -2154,15 +2212,6 @@ abstract class MetalsLspService(
         userConfig.definitionIndexStrategy.isClasspath,
       mtags = () => mtags,
     )
-  }
-
-  protected def clearBloopDir(folder: AbsolutePath): Unit = {
-    try BloopDir.clear(folder)
-    catch {
-      case e: Throwable =>
-        languageClient.showMessage(Messages.ResetWorkspaceFailed)
-        scribe.error("Error while deleting directories inside .bloop", e)
-    }
   }
 
   protected def clearFolders(folders: AbsolutePath*): Unit = {

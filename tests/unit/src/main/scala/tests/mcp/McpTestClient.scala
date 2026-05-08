@@ -1,5 +1,7 @@
 package tests.mcp
 
+import java.time.Duration
+
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -16,7 +18,8 @@ import io.modelcontextprotocol.spec.McpSchema.TextContent
 class TestMcpClient(url: String, val port: Int)(implicit ec: ExecutionContext) {
   private val objectMapper = new ObjectMapper()
   private val transport = new HttpClientSseClientTransport(url)
-  private val client = McpClient.async(transport).build()
+  private val client =
+    McpClient.async(transport).requestTimeout(Duration.ofMinutes(5)).build()
 
   private def callTool(
       toolName: String,
@@ -67,6 +70,11 @@ class TestMcpClient(url: String, val port: Int)(implicit ec: ExecutionContext) {
     callTool("compile-module", params).map(_.mkString)
   }
 
+  def compileFull(): Future[String] = {
+    val params = objectMapper.createObjectNode()
+    callTool("compile-full", params).map(_.mkString)
+  }
+
   def listModules(): Future[String] = {
     val params = objectMapper.createObjectNode()
     callTool("list-modules", params).map(_.mkString)
@@ -77,4 +85,54 @@ class TestMcpClient(url: String, val port: Int)(implicit ec: ExecutionContext) {
     params.put("fileInFocus", filePath)
     callTool("format-file", params).map(_.mkString)
   }
+
+  def generateScalafixRule(
+      ruleImplementation: String,
+      ruleDescription: String,
+      sampleCode: Option[String] = None,
+  ): Future[String] = {
+    val params = objectMapper.createObjectNode()
+    params.put("ruleImplementation", ruleImplementation)
+    params.put("description", ruleDescription)
+    sampleCode.foreach(code => params.put("sampleCode", code))
+    callTool("generate-scalafix-rule", params).map(_.mkString)
+  }
+
+  def listScalafixRules(): Future[String] = {
+    val params = objectMapper.createObjectNode()
+    callTool("list-scalafix-rules", params).map(_.mkString)
+  }
+
+  def runScalafixRule(
+      ruleName: String,
+      filePath: Option[String] = None,
+  ): Future[String] = {
+    val params = objectMapper.createObjectNode()
+    params.put("ruleName", ruleName)
+    filePath.foreach(path => params.put("fileToRunOn", path))
+    callTool("run-scalafix-rule", params).map(_.mkString)
+  }
+
+  def typedGlobSearch(
+      query: String,
+      symbolTypes: List[String],
+  ): Future[String] = {
+    val params = objectMapper.createObjectNode()
+    params.put("query", query)
+    val symbolTypeArray = objectMapper.createArrayNode()
+    symbolTypes.foreach(symbolTypeArray.add)
+    params.set("symbolType", symbolTypeArray)
+    callTool("typed-glob-search", params).map(_.mkString)
+  }
+
+  def typedGlobSearch(
+      query: String,
+      symbolTypes: String,
+  ): Future[String] = {
+    val params = objectMapper.createObjectNode()
+    params.put("query", query)
+    params.put("symbolType", symbolTypes)
+    callTool("typed-glob-search", params).map(_.mkString)
+  }
+
 }

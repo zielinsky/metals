@@ -127,11 +127,63 @@ object BazelBuildLayout extends BuildToolLayout {
       sourceLayout: String,
       scalaVersion: String,
       bazelVersion: String,
+  ): String = apply(sourceLayout, scalaVersion, bazelVersion, Nil)
+
+  def apply(
+      sourceLayout: String,
+      scalaVersion: String,
+      bazelVersion: String,
+      mavenDeps: List[String],
   ): String =
-    s"""|/.bazelversion
+    s"""|/.metals/txt.txt
+        |initialize the project for metals
+        |/.bazelversion
         |$bazelVersion
-        |${apply(sourceLayout, scalaVersion)}
+        |/MODULE.bazel
+        |${moduleFileLayout(scalaVersion, mavenDeps)}
+        |/BUILD
+        |
+        |/WORKSPACE
+        |# Empty WORKSPACE file for compatibility
+        |$sourceLayout
         |""".stripMargin
+
+  def moduleFileLayout(
+      scalaVersion: String,
+      mavenDeps: List[String] = Nil,
+  ): String = {
+    val mavenSection =
+      if (mavenDeps.isEmpty) ""
+      else {
+        val artifacts = mavenDeps.map(d => s""""$d"""").mkString(",\n        ")
+        s"""|
+            |bazel_dep(name = "rules_jvm_external", version = "6.6")
+            |
+            |maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+            |maven.install(
+            |    artifacts = [
+            |        $artifacts
+            |    ],
+            |    fetch_sources = True,
+            |    lock_file = "//:maven_install.json",
+            |)
+            |use_repo(maven, "maven")
+            |""".stripMargin
+      }
+    s"""|bazel_dep(name = "rules_scala", version = "7.2.4")
+        |
+        |scala_config = use_extension("@rules_scala//scala/extensions:config.bzl", "scala_config")
+        |scala_config.settings(scala_version = "$scalaVersion")
+        |
+        |scala_deps = use_extension("@rules_scala//scala/extensions:deps.bzl", "scala_deps")
+        |scala_deps.settings(fetch_sources = True)
+        |scala_deps.scala()
+        |use_repo(scala_deps, "rules_scala_toolchains")
+        |
+        |register_toolchains("@rules_scala_toolchains//...:all")
+        |
+        |$mavenSection""".stripMargin
+  }
 
   def workspaceFileLayout(scalaVersion: String): String =
     s"""|# WORKSPACE
@@ -184,5 +236,73 @@ object BazelBuildLayout extends BuildToolLayout {
         |load("@io_bazel_rules_scala//testing:scalatest.bzl", "scalatest_repositories", "scalatest_toolchain")
         |scalatest_repositories()
         |scalatest_toolchain()
+        |""".stripMargin
+}
+
+object BazelModuleLayout extends BuildToolLayout {
+  private def baseLayout(
+      sourceLayout: String,
+      scalaVersion: String,
+      enableToolChainRegistration: Boolean = false,
+  ): String =
+    s"""|/MODULE.bazel
+        |${moduleFileLayout(scalaVersion, enableToolChainRegistration)}
+        |$sourceLayout
+        |""".stripMargin
+
+  override def apply(sourceLayout: String, scalaVersion: String): String =
+    baseLayout(scalaVersion, scalaVersion)
+
+  def apply(
+      sourceLayout: String,
+      scalaVersion: String,
+      bazelVersion: String,
+      enableToolChainRegistration: Boolean = false,
+  ): String =
+    s"""|/.bazelversion
+        |$bazelVersion
+        |${baseLayout(sourceLayout, scalaVersion, enableToolChainRegistration)}
+        |""".stripMargin
+
+  def moduleFileLayout(
+      scalaVersion: String,
+      enableToolChainRegistration: Boolean = false,
+  ): String =
+    s"""|
+        |bazel_dep(name = "bazel_skylib", version = "1.8.1")
+        |bazel_dep(name = "rules_scala", version = "7.0.0")
+        |bazel_dep(name = "rules_java", version = "8.15.1")
+        |bazel_dep(name = "rules_python", version = "1.5.3")
+        |
+        |${if (enableToolChainRegistration) "register_toolchains(\"//:semanticdb_toolchain\")" else ""}
+        |
+        |scala_version = "$scalaVersion"
+        |
+        |scala_config = use_extension(
+        |    "@rules_scala//scala/extensions:config.bzl",
+        |    "scala_config",
+        |)
+        |scala_config.settings(scala_version = scala_version)
+        |
+        |scala_deps = use_extension(
+        |    "@rules_scala//scala/extensions:deps.bzl",
+        |    "scala_deps",
+        |)
+        |scala_deps.settings(
+        |    fetch_sources = True,
+        |)
+        |scala_deps.scala()
+        |scala_deps.scalatest()
+        |scala_deps.junit()
+        |
+        |bazel_dep(name = "rules_jvm_external", version = "4.5")
+        |
+        |maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+        |maven.install(
+        |    artifacts = [
+        |        "junit:junit:4.13.2",
+        |    ],
+        |)
+        |use_repo(maven, "maven")
         |""".stripMargin
 }

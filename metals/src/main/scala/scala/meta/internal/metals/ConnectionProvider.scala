@@ -44,6 +44,7 @@ import scala.meta.io.AbsolutePath
 
 import org.eclipse.lsp4j.DidChangeWatchedFilesRegistrationOptions
 import org.eclipse.lsp4j.FileSystemWatcher
+import org.eclipse.lsp4j
 import org.eclipse.lsp4j.MessageParams
 import org.eclipse.lsp4j.MessageType
 import org.eclipse.lsp4j.Registration
@@ -179,12 +180,21 @@ class ConnectionProvider(
    * - Otherwise → normal slow-connect path (BloopInstall / BSP prompts).
    */
   private def connectBuildServer(progress: TaskProgress): Future[Unit] = {
-    val mbtImporters = buildTools.mbtImporters(shellRunner, () => userConfig)
+    val mbtImporters = buildTools.mbtImporters(
+      shellRunner,
+      () => userConfig,
+      Some(languageClient),
+      Some(tables),
+    )
     if (isMbtPreferred) {
       for {
         _ <- runMbtReimport(mbtImporters)
         _ <-
-          if (bspSession.isEmpty) connect(CreateSession(), progress).ignoreValue
+          if (bspSession.isEmpty)
+            connect(
+              CreateSession(regenerateBspConfig = false),
+              progress,
+            ).ignoreValue
           else Future.unit
       } yield ()
     } else if (buildTools.isAutoConnectable(buildToolProvider.optProjectRoot)) {
@@ -221,9 +231,11 @@ class ConnectionProvider(
                 connect(CreateSession(), progress).ignoreValue
               } else Future.unit
             }
-        } else if (item == Messages.ChooseBuildServer.bloop) {
-          tables.buildServers.chooseServer(BloopServers.name)
-          slowConnectToBuildServer(forceImport = true, progress).ignoreValue
+        } else if (item == Messages.ChooseBuildServer.bsp) {
+          slowConnectToStandardBuildServer(
+            forceImport = false,
+            progress,
+          ).ignoreValue
         } else {
           Future.unit
         }
@@ -316,7 +328,12 @@ class ConnectionProvider(
       forceImport: Boolean,
       progress: TaskProgress,
   ): Future[BuildChange] = {
-    def mbtImporters = buildTools.mbtImporters(shellRunner, () => userConfig)
+    def mbtImporters = buildTools.mbtImporters(
+      shellRunner,
+      () => userConfig,
+      Some(languageClient),
+      Some(tables),
+    )
     if (isMbtPreferred && mbtImporters.nonEmpty) {
       val runImport =
         if (forceImport) forceMbtReimport(mbtImporters)
@@ -600,8 +617,12 @@ class ConnectionProvider(
                 importBuildAndIndex(session, progress)
               case ConnectToSession(session) =>
                 connectToSession(session, progress)
-              case CreateSession(shutdownBuildServer) =>
-                createSession(shutdownBuildServer, progress)
+              case CreateSession(shutdownBuildServer, regenerateBspConfig) =>
+                createSession(
+                  shutdownBuildServer,
+                  regenerateBspConfig,
+                  progress,
+                )
               case GenerateBspConfigAndConnect(buildTool, shutdownServer) =>
                 generateBspConfigAndConnect(
                   buildTool,
@@ -713,11 +734,24 @@ class ConnectionProvider(
         }
         _ = compilers.cancel()
         buildChange <- index(check, progress)
+        _ <- refreshMbtTurbineClasspath(session).withInterrupt
       } yield {
         syncStatusReporter.importFinished(focusedDocument.map(_.toURI.toString))
         buildChange
       }
     }
+
+    private def refreshMbtTurbineClasspath(
+        session: BspSession
+    ): Future[Unit] =
+      if (
+        MbtBuildServer.isMbtServer(session.main.name) &&
+        userConfig.javaSymbolLoader.isTurbineClasspath
+      ) {
+        mbtSymbolSearch.recompileTurbineClasspath()
+      } else {
+        Future.unit
+      }
 
     private def saveProjectReferencesInfo(
         bspBuilds: List[BspSession.BspBuild]
@@ -797,6 +831,7 @@ class ConnectionProvider(
 
     def createSession(
         shutdownServer: Boolean,
+        regenerateBspConfig: Boolean,
         progress: TaskProgress,
     )(implicit cancelSwitch: CancelSwitch): Interruptable[BuildChange] = {
       def compileAllOpenFiles: BuildChange => Future[BuildChange] = {
@@ -830,13 +865,24 @@ class ConnectionProvider(
             "Connected to build server",
             true,
           ) {
-            bspConnector.connect(
-              buildToolProvider.buildTool,
-              folder,
-              () => userConfig,
-              shellRunner,
-              progress,
-            )
+            // If chosen build tool was removed at any point we want to readd it
+            val buildToolOpt: Future[Option[BuildTool]] =
+              buildToolProvider.buildTool match {
+                case Some(value) =>
+                  Future.successful(Some(value))
+                case None =>
+                  buildToolProvider.loadSingleBuildTool()
+              }
+            buildToolOpt.flatMap { toolOpt =>
+              bspConnector.connect(
+                toolOpt,
+                folder,
+                () => userConfig,
+                shellRunner,
+                progress,
+                regenerateBspConfig,
+              )
+            }
           }
           .withInterrupt
         result <- maybeSession match {
@@ -901,7 +947,8 @@ class ConnectionProvider(
           .withInterrupt
         shouldConnect = handleGenerationStatus(buildTool, status)
         status <-
-          if (shouldConnect) createSession(false, progress)
+          if (shouldConnect)
+            createSession(false, regenerateBspConfig = true, progress)
           else Interruptable.successful(BuildChange.Failed)
       } yield status
     }
@@ -941,11 +988,19 @@ class ConnectionProvider(
         buildTool: BloopInstallProvider,
         progress: TaskProgress,
     )(implicit cancelSwitch: CancelSwitch): Interruptable[BuildChange] = {
+      val logsFile = buildToolProvider.folder.resolve(Directories.log)
+      val logsPath = logsFile.toURI.toString
+      val logsLinesCountBefore =
+        if (logsFile.exists) logsFile.readText.linesIterator.size else 0
       for {
         result <- bloopInstall.run(buildTool).withInterrupt
         change <- {
           if (result.isInstalled)
-            createSession(shutdownServer = false, progress)
+            createSession(
+              shutdownServer = false,
+              regenerateBspConfig = true,
+              progress,
+            )
           else if (result.isFailed) {
             for {
               change <-
@@ -954,14 +1009,38 @@ class ConnectionProvider(
                     buildToolProvider.optProjectRoot
                   )
                 ) {
-                  // TODO(olafur) try to connect but gracefully error
-                  languageClient.showMessage(
-                    Messages.ImportProjectPartiallyFailed
-                  )
+                  languageClient
+                    .showMessageRequest(
+                      Messages.ImportProjectPartiallyFailed.params()
+                    )
+                    .asScala
+                    .foreach {
+                      case Messages.ImportProjectPartiallyFailed.showLogs =>
+                        val cursorRange = new lsp4j.Range(
+                          new lsp4j.Position(logsLinesCountBefore, 0),
+                          new lsp4j.Position(logsLinesCountBefore, 0),
+                        )
+                        val location = new lsp4j.Location(logsPath, cursorRange)
+                        languageClient.metalsExecuteClientCommand(
+                          ClientCommands.GotoLocation
+                            .toExecuteCommandParams(
+                              ClientCommands.WindowLocation(
+                                location.getUri(),
+                                location.getRange(),
+                              )
+                            )
+                        )
+                      case _ => Interruptable.successful(BuildChange.Failed)
+                    }
+
                   // Connect nevertheless, many build import failures are caused
                   // by resolution errors in one weird module while other modules
                   // exported successfully.
-                  createSession(shutdownServer = false, progress)
+                  createSession(
+                    shutdownServer = false,
+                    regenerateBspConfig = true,
+                    progress,
+                  )
                 } else {
                   buildTool match {
                     case _: BuildServerProvider =>
@@ -1007,7 +1086,12 @@ class ConnectionProvider(
                         mbtImport
                           .runUnconditionally(
                             buildTools
-                              .mbtImporters(shellRunner, () => userConfig),
+                              .mbtImporters(
+                                shellRunner,
+                                () => userConfig,
+                                Some(languageClient),
+                                Some(tables),
+                              ),
                             isMbtImportInProcess,
                           )
                       } else Future.successful(WorkspaceLoadedStatus.Installed)
@@ -1089,12 +1173,15 @@ case class ConnectToSession(bspSession: BspSession)
 
   def show: String = s"connect to session for ${bspSession.main.name}"
 }
-case class CreateSession(shutdownBuildServer: Boolean = false)
-    extends ConnectRequest("Establishing build server session") {
+case class CreateSession(
+    shutdownBuildServer: Boolean = false,
+    regenerateBspConfig: Boolean = true,
+) extends ConnectRequest("Establishing build server session") {
   def cancelCompare(other: ConnectRequest): ConflictBehaviour =
     other match {
       case (_: Disconnect) | (_: Index) | (_: ConnectToSession) | CreateSession(
-            false
+            false,
+            _,
           ) =>
         TakeOver
       case _ => Yield

@@ -11,6 +11,17 @@ object ScalacDiagnostic {
     def unapply(d: l.Diagnostic): Option[l.TextEdit] = d.asTextEdit
   }
 
+  object Scala3Diagnostic {
+    def unapply(
+        d: l.Diagnostic
+    ): Option[Seq[l.CodeAction]] =
+      d.getData() match {
+        case list: Seq[_] =>
+          Some(list.collect { case a: l.CodeAction => a })
+        case _ => None
+      }
+  }
+
   object ScalaDiagnostic {
     def unapply(
         d: l.Diagnostic

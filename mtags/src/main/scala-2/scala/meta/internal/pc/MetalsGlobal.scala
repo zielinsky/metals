@@ -1,6 +1,5 @@
 package scala.meta.internal.pc
 
-import java.io.Closeable
 import java.net.URI
 import java.nio.file.Path
 import java.util
@@ -72,19 +71,13 @@ class MetalsGlobal(
     with AutoImports
     with Keywords
     with PcDiagnostics
-    with WorkspaceSymbolSearch
-    with Closeable { compiler =>
+    with WorkspaceSymbolSearch { compiler =>
   hijackPresentationCompilerThread(
     backgroundCompilation = !metalsConfig.emitDiagnostics()
   )
 
   lazy val logger: Logger =
     org.slf4j.LoggerFactory.getLogger(classOf[MetalsGlobal])
-
-  override def close(): Unit = {
-    super.close()
-    logger.debug("Restarting compiler and clearing caches.")
-  }
 
   val richCompilationCache: TrieMap[String, RichCompilationUnit] =
     TrieMap.empty[String, RichCompilationUnit]

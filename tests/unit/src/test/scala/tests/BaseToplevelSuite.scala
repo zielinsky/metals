@@ -7,6 +7,7 @@ import scala.meta.dialects
 import scala.meta.internal.metals.MetalsEnrichments._
 import scala.meta.internal.mtags.Mtags
 import scala.meta.internal.mtags.ResolvedOverriddenSymbol
+import scala.meta.internal.mtags.ToplevelMember
 import scala.meta.internal.mtags.UnresolvedOverriddenSymbol
 import scala.meta.io.AbsolutePath
 
@@ -35,14 +36,18 @@ abstract class BaseToplevelSuite extends BaseSuite {
         mode match {
           case All | ToplevelWithInner =>
             val includeMembers = mode == All
-            val (doc, overrides) =
-              Mtags.testingSingleton.indexWithOverrides(
+            val (doc, overrides, toplevelMembers) =
+              Mtags.testingSingleton.extendedIndexing(
                 input,
                 dialect,
                 includeMembers,
               )
             val overriddenMap = overrides.toMap
-            doc.symbols.map { symbolInfo =>
+            val types = toplevelMembers.map {
+              case ToplevelMember(symbol, _, _) =>
+                s"type $symbol"
+            }
+            val symbols = doc.symbols.map { symbolInfo =>
               val suffix = if (symbolInfo.isExtension) " EXT" else ""
               val symbol = symbolInfo.symbol
               overriddenMap.get(symbol) match {
@@ -58,6 +63,7 @@ abstract class BaseToplevelSuite extends BaseSuite {
                   s"$symbol$suffix -> $overridden"
               }
             }
+            symbols ++ types
           case Toplevel =>
             Mtags.testingSingleton.topLevelSymbols(input, dialect)
         }

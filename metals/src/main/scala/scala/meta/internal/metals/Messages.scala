@@ -125,11 +125,20 @@ object Messages {
     s"Import already running. \nPlease cancel the current import to run a new one.",
   )
 
-  val ImportProjectPartiallyFailed = new MessageParams(
-    MessageType.Warning,
-    "Import project partially failed, limited functionality may work in some parts of the workspace. " +
-      "See the logs for more details. ",
-  )
+  object ImportProjectPartiallyFailed {
+    val showLogs = new MessageActionItem("Show logs")
+
+    def params(): ShowMessageRequestParams = {
+      val request = new ShowMessageRequestParams()
+      request.setMessage(
+        "Import project partially failed, limited functionality may work in some parts of the workspace. " +
+          "See the logs for more details. "
+      )
+      request.setType(MessageType.Warning)
+      request.setActions(List(showLogs).asJava)
+      request
+    }
+  }
 
   val InsertInferredTypeFailed = new MessageParams(
     MessageType.Error,
@@ -201,7 +210,7 @@ object Messages {
   }
 
   object ChooseBuildServer {
-    def bloop: MessageActionItem = new MessageActionItem("Use Bloop")
+    def bsp: MessageActionItem = new MessageActionItem("Use BSP")
     def mbt: MessageActionItem = new MessageActionItem("Use MBT")
     def notNow: MessageActionItem = Messages.notNow
 
@@ -211,9 +220,34 @@ object Messages {
         s"New $buildToolName workspace detected. Which build server would you like to use?"
       )
       params.setType(MessageType.Info)
-      params.setActions(List(bloop, mbt, notNow).asJava)
+      params.setActions(List(bsp, mbt, notNow).asJava)
       params
     }
+  }
+
+  object BazelMbtNamespaceChoice {
+    def workspace: MessageActionItem =
+      new MessageActionItem("Single global target")
+    def packages: MessageActionItem =
+      new MessageActionItem("Each build target")
+
+    def params(): ShowMessageRequestParams = {
+      val params = new ShowMessageRequestParams()
+      params.setMessage(
+        "How should Metals group Bazel targets in the MBT build?"
+      )
+      params.setType(MessageType.Info)
+      params.setActions(List(packages, workspace).asJava)
+      params
+    }
+
+    def selectedMode(
+        item: MessageActionItem
+    ): Option[mbt.importer.BazelMbtNamespaceMode] =
+      if (item == workspace) Some(mbt.importer.BazelMbtNamespaceMode.Workspace)
+      else if (item == packages)
+        Some(mbt.importer.BazelMbtNamespaceMode.BuildFile)
+      else None
   }
 
   object StartHttpServer {

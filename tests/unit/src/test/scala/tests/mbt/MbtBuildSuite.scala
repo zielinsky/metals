@@ -68,8 +68,12 @@ class MbtBuildSuite extends tests.BaseSuite {
           |      "sources": [
           |        "./src"
           |      ],
-          |      "compilerOptions": [
+          |      "scalacOptions": [
           |        "-release",
+          |        "11"
+          |      ],
+          |      "javacOptions": [
+          |        "--release",
           |        "11"
           |      ],
           |      "dependencyModules": [

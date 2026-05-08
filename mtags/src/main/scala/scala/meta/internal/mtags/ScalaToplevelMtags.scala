@@ -63,10 +63,17 @@ class ScalaToplevelMtags(
   override def overrides(): List[(String, List[OverriddenSymbol])] =
     overridden.result()
 
+  override def toplevelMembers(): List[ToplevelMember] =
+    toplevelMembersBuilder.result()
+
   private val overridden = List.newBuilder[(String, List[OverriddenSymbol])]
+  private val toplevelMembersBuilder = List.newBuilder[ToplevelMember]
 
   private def addOverridden(symbols: List[OverriddenSymbol]) =
     overridden += ((currentOwner, symbols))
+
+  private def addToplevelMembers(members: List[ToplevelMember]) =
+    toplevelMembersBuilder ++= members
 
   import ScalaToplevelMtags._
 
@@ -357,7 +364,9 @@ class ScalaToplevelMtags(
         case TYPE if expectTemplate.map(!_.isExtension).getOrElse(true) =>
           if (needEmitMember(currRegion) && !prevWasDot) {
             withOwner(currRegion.termOwner) {
-              emitType(needEmitTermMember())
+              emitType(
+                needEmitTermMember()
+              )
             }
           } else scanner.mtagsNextToken()
           loop(indent.notAfterNewline, currRegion, newExpectIgnoreBody)
@@ -813,11 +822,18 @@ class ScalaToplevelMtags(
     scanner.mtagsNextToken()
   }
 
-  def emitType(emitTermMember: Boolean): Option[Unit] = {
+  def emitType(
+      emitTermMember: Boolean
+  ): Option[Unit] = {
     acceptTrivia()
     newIdentifier
       .map { ident =>
         val typeSymbol = symbol(Descriptor.Type(ident.name))
+        if (owner.endsWith("/package.") || owner.endsWith("$package.")) {
+          addToplevelMembers(
+            List(ToplevelMember(typeSymbol, ident.pos.toRange, Kind.TYPE))
+          )
+        }
         if (emitTermMember) {
           tpe(ident.name, ident.pos, Kind.TYPE, 0)
         }

@@ -92,8 +92,15 @@ final class TargetData() {
   }
 
   def allTargetRoots: Iterator[AbsolutePath] = {
-    val scalaTargetRoots = scalaTargetInfo.map(_._2.targetroot)
-    val javaTargetRoots = javaTargetInfo.flatMap(_._2.targetroot)
+    val scalaTargetRoots = scalaTargetInfo.flatMap { case (_, scalaTarget) =>
+      Seq(
+        Some(scalaTarget.targetroot),
+        scalaTarget.targetroot.alternativeTargetRoot,
+      ).flatten
+    }
+    val javaTargetRoots = javaTargetInfo
+      .flatMap(_._2.targetroot)
+      .flatMap(path => Seq(Some(path), path.alternativeTargetRoot).flatten)
     val allTargetRoots = scalaTargetRoots.toSet ++ javaTargetRoots.toSet
     allTargetRoots.iterator
   }

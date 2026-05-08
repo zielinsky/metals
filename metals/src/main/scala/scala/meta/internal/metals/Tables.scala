@@ -5,6 +5,7 @@ import java.sql.Connection
 import scala.util.control.NonFatal
 
 import scala.meta.internal.builds.Digests
+import scala.meta.internal.metals.mbt.importer.BazelMbtNamespaceModes
 import scala.meta.io.AbsolutePath
 
 final class Tables(
@@ -31,6 +32,8 @@ final class Tables(
     new ChosenBuildTool(() => connection)
   val fingerprints =
     new Fingerprints(() => connection)
+  val bazelMbtNamespaceModes =
+    new BazelMbtNamespaceModes(() => connection, time)
 
   override protected def tryNoAutoServer(): Connection = {
     try {

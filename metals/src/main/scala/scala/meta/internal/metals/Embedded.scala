@@ -349,6 +349,7 @@ object Embedded {
       "3.4.1" -> "1.2.1",
       "3.4.0" -> "1.2.0",
     )
+
     val resolutionParams = resolution.getOrElse(ResolutionParams.create())
 
     scalaVersion.foreach { scalaVersion =>

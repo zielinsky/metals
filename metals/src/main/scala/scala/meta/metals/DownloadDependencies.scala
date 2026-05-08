@@ -14,6 +14,7 @@ import scala.meta.internal.metals.Embedded
 import scala.meta.internal.metals.FormattingProvider
 import scala.meta.internal.metals.ScalaVersions
 import scala.meta.internal.metals.debug.server.MetalsDebugToolsResolver
+import scala.meta.internal.metals.debug.server.testing.TestInternals
 import scala.meta.internal.metals.logging.MetalsLogger
 import scala.meta.internal.mtags.CoursierComplete
 import scala.meta.internal.semver.SemVer
@@ -73,7 +74,8 @@ object DownloadDependencies {
       downloadBazelBsp() ++
       downloadScala3PresentationCompiler(filterVersions) ++
       downloadAllScalafixVersions(filterVersions) ++
-      downloadAllScalaDebugToolVersions(filterVersions)
+      downloadAllScalaDebugToolVersions(filterVersions) ++
+      downloadTestAgent()
 
     val distinctFiles = allPaths.distinct
     val copyToDest = args.indexOf("--copy-to") match {
@@ -302,5 +304,10 @@ object DownloadDependencies {
           else Seq.empty
         expressionCompilerJars ++ debugDecoderJars
       }
+  }
+
+  def downloadTestAgent(): Seq[Path] = {
+    scribe.info(s"Downloading test-agent")
+    Embedded.downloadDependency(TestInternals.dependency)
   }
 }

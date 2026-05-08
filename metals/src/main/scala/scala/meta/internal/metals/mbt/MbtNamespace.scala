@@ -5,7 +5,8 @@ import javax.annotation.Nullable
 
 case class MbtNamespace(
     @Nullable sources: ju.List[String],
-    @Nullable compilerOptions: ju.List[String],
+    @Nullable scalacOptions: ju.List[String],
+    @Nullable javacOptions: ju.List[String],
     @Nullable dependencyModules: ju.List[String] = ju.Collections.emptyList(),
     @Nullable scalaVersion: String,
     @Nullable javaHome: String,
@@ -13,8 +14,12 @@ case class MbtNamespace(
 ) {
   def getSources: ju.List[String] =
     Option(this.sources).getOrElse(ju.Collections.emptyList())
-  def getCompilerOptions: ju.List[String] =
-    Option(this.compilerOptions).getOrElse(ju.Collections.emptyList())
+  def getScalacOptions: ju.List[String] =
+    Option(this.scalacOptions)
+      .getOrElse(ju.Collections.emptyList())
+  def getJavacOptions: ju.List[String] =
+    Option(this.javacOptions)
+      .getOrElse(ju.Collections.emptyList())
   def getDependencyModuleIds: ju.List[String] =
     Option(this.dependencyModules).getOrElse(ju.Collections.emptyList())
   def getDependsOn: ju.List[String] =

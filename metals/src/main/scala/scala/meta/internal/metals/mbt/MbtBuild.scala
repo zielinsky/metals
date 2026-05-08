@@ -52,7 +52,8 @@ case class MbtBuild(
             id = new bsp4j.BuildTargetIdentifier(MbtBuild.LegacyTargetName),
             sources = Nil,
             globMatchers = Nil,
-            compilerOptions = Nil,
+            scalacOptions = Nil,
+            javacOptions = Nil,
             dependencyModules = dependencyModules.asScala.toSeq,
           )
         }
@@ -94,7 +95,8 @@ case class MbtBuild(
             new bsp4j.BuildTargetIdentifier(MbtBuild.namespaceTargetId(name)),
           sources = exactSources,
           globMatchers = globPatterns.map(MbtGlobMatcher.fromPattern),
-          compilerOptions = namespace.getCompilerOptions.asScala.toSeq,
+          scalacOptions = namespace.getScalacOptions.asScala.toSeq,
+          javacOptions = namespace.getJavacOptions.asScala.toSeq,
           dependencyModules = nsModules,
           scalaVersion = Option(namespace.scalaVersion),
           javaHome = Option(namespace.javaHome),

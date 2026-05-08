@@ -468,7 +468,13 @@ object MbtBuildServer {
       val serverInput = new PipedInputStream()
       val clientOutput = new PipedOutputStream(serverInput)
       val finished = Promise[Unit]()
-      val server = new MbtBuildServer(workspace, mbtBuild, scalaVersionSelector)
+      def eagerBuild() = {
+        val updatedBuild = mbtBuild()
+        if (updatedBuild.isEmpty) MbtBuild.fromWorkspace(workspace)
+        else updatedBuild
+      }
+      val server =
+        new MbtBuildServer(workspace, eagerBuild, scalaVersionSelector)
       val serverLauncher = new Launcher.Builder[BuildClient]()
         .setInput(serverInput)
         .setOutput(serverOutput)

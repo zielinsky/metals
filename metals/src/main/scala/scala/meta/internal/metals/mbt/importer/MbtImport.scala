@@ -45,18 +45,7 @@ final class MbtImport(
       Future.successful(WorkspaceLoadedStatus.Installed)
     } else if (isImportInProcess.compareAndSet(false, true)) {
       Future
-        .sequence(
-          providers.map(p =>
-            p.extract(workspace)
-              .map { _ =>
-                Try(MbtBuild.fromFile(p.outputPath(workspace).toNIO)).toOption
-              }
-              .recover { case ex =>
-                scribe.error(s"mbt-import: provider '${p.name}' failed", ex)
-                None
-              }
-          )
-        )
+        .sequence(providers.map(runProvider))
         .map { results =>
           val builds = results.flatten
           if (builds.nonEmpty) {
@@ -76,6 +65,23 @@ final class MbtImport(
         WorkspaceLoadedStatus.Dismissed
       }
     }
+  }
+
+  private def runProvider(
+      provider: MbtImportProvider
+  ): Future[Option[MbtBuild]] = {
+    provider
+      .extract(workspace)
+      .map { _ =>
+        Try(MbtBuild.fromFile(provider.outputPath(workspace).toNIO)).toOption
+          .flatMap { build =>
+            if (build.isEmpty) None else Some(build)
+          }
+      }
+      .recover { case ex =>
+        scribe.error(s"mbt-import: provider '${provider.name}' failed", ex)
+        None
+      }
   }
 
   /**

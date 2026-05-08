@@ -22,17 +22,17 @@ object SemanticdbPrinter {
     ): Unit = {
       out.append("// ")
       val start = out.length
-      val indent = " ".repeat(range.getStartCharacter())
+      val indent = " " * range.getStartCharacter()
       out.append(indent)
       val isSingleLine =
         range.getStartLine() == range.getEndLine()
       if (isSingleLine) {
         val length =
           math.max(1, range.getEndCharacter() - range.getStartCharacter())
-        out.append("^".repeat(length))
+        out.append("^" * length)
       } else {
         val length = math.max(1, line.stripLineEnd.length() - indent.length())
-        out.append("^".repeat(length))
+        out.append("^" * length)
         out.append("!")
         out.append(range.getEndLine())
         out.append(":")
@@ -46,7 +46,7 @@ object SemanticdbPrinter {
           rest.foreach { messageLine =>
             out.append("\n")
             out.append("// ")
-            out.append(" ".repeat(caretCharacter))
+            out.append(" " * caretCharacter)
             out.append(messageLine)
           }
         case Nil =>
@@ -81,7 +81,7 @@ object SemanticdbPrinter {
       if (line.trim().nonEmpty) {
         out.append(
           // Indentation for occurrence comments
-          " ".repeat("// ".length())
+          " " * "// ".length()
         )
       }
       out.append(replaceTabs(line))
@@ -139,6 +139,6 @@ object SemanticdbPrinter {
   private def replaceTabs(line: String): String = {
     val pattern = "^(\t+)"
     val tabCount = pattern.r.findFirstIn(line).fold(0)(_.length)
-    line.replaceFirst(pattern, " ".repeat(tabCount))
+    line.replaceFirst(pattern, " " * tabCount)
   }
 }

@@ -55,7 +55,7 @@ object ServerCommands {
     """Unconditionally stop the current running Bloop server and start a new one using Bloop launcher""",
   )
 
-  val ResetWorkspace = new Command(
+  val ResetWorkspace = new ParametrizedCommand[Boolean](
     "reset-workspace",
     "Clean and restart build server",
     """|Clean metals cache and restart build server.
@@ -63,6 +63,8 @@ object ServerCommands {
        |When using Bloop, clears all directories in .bloop.
        |This will ensure that Bloop will have a fully reset state.
        |""".stripMargin,
+    "[boolean], force the reset without asking the user",
+    default = Some(false),
   )
 
   val ScanWorkspaceSources = new Command(
@@ -458,6 +460,18 @@ object ServerCommands {
     "[string], where the string is a stacktrace.",
   )
 
+  val ResolveStacktraceLocation = new ParametrizedCommand[String](
+    "resolve-stacktrace-location",
+    "Resolve stacktrace location",
+    """|Resolves a single line of a stacktrace to its source location.
+       |
+       |Returns a Location object containing the URI and line number of the 
+       |source file where the stacktrace line originated, if it can be resolved
+       |to a location in the workspace.
+       |""".stripMargin,
+    "[string], where the string is a single line from a stacktrace.",
+  )
+
   val MetalsPaste = new ParametrizedCommand[MetalsPasteParams](
     "metals-did-paste",
     "Add needed import statements after paste",
@@ -641,6 +655,18 @@ object ServerCommands {
     "[uri], the uri of the worksheet that you'd like to copy the contents of.",
   )
 
+  val CopyFQNOfSymbol = new ParametrizedCommand[TextDocumentPositionParams](
+    "copy-fqn",
+    "Copy fully qualified name of symbol",
+    s"""|Copy the fully qualified name of a symbol to the clipboard.
+        |
+        |Note: This command returns the fully qualified name of the symbol, and the LSP client
+        |is in charge of taking that content and putting it into your local buffer.
+        |""".stripMargin,
+    """|This command should be sent in with the LSP [`TextDocumentPositionParams`](https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocumentPositionParams)
+       |""".stripMargin,
+  )
+
   val ExtractMemberDefinition =
     new ParametrizedCommand[TextDocumentPositionParams](
       "extract-member-definition",
@@ -776,6 +802,7 @@ object ServerCommands {
   def all: List[BaseCommand] =
     List(
       AnalyzeStacktrace,
+      ResolveStacktraceLocation,
       BspSwitch,
       ConnectBuildServer,
       CancelCompile,
@@ -783,6 +810,7 @@ object ServerCommands {
       CleanCompile,
       CompileTarget,
       CopyWorksheetOutput,
+      CopyFQNOfSymbol,
       DiscoverMainClasses,
       DiscoverTestSuites,
       ExtractMemberDefinition,
@@ -881,6 +909,7 @@ case class DebugDiscoveryParams(
     @Nullable jvmOptions: java.util.List[String] = null,
     @Nullable env: java.util.Map[String, String] = null,
     @Nullable envFile: String = null,
+    @Nullable position: Position = null,
 )
 
 case class RunScalafixRulesParams(

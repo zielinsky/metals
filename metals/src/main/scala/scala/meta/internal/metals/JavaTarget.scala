@@ -46,7 +46,7 @@ case class JavaTarget(
 
   def sourceVersion: Option[String] = javac.sourceVersion
 
-  def targetroot: Option[AbsolutePath] = javac.targetroot.map(_.resolveIfJar)
+  def targetroot: Option[AbsolutePath] = javac.targetroot
 
   /**
    * If the build server supports lazy classpath resolution, we will

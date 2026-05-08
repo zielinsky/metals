@@ -79,6 +79,9 @@ class TestingClient(workspace: AbsolutePath, val buffers: Buffers)
   var selectBspServer: Seq[MessageActionItem] => MessageActionItem = { _ =>
     null
   }
+  var selectedServer: MessageActionItem = ChooseBuildServer.bsp
+  var chooseBazelMbtNamespaceMode: MessageActionItem =
+    BazelMbtNamespaceChoice.packages
   var chooseWorkspaceFolder: Seq[MessageActionItem] => MessageActionItem =
     _.head
   var chooseBuildTool: Seq[MessageActionItem] => MessageActionItem = {
@@ -303,7 +306,11 @@ class TestingClient(workspace: AbsolutePath, val buffers: Buffers)
       .mkString("\n")
   }
   def workspaceDiagnostics: String = {
-    val paths = diagnostics.keys.toList.sortBy(_.toURI.toString)
+    val paths = diagnostics.keys.toList
+      .filter(f =>
+        f.isScalaOrJava || f.isProtoFilename || f.extension == "conf"
+      )
+      .sortBy(_.toURI.toString)
     paths.map(pathDiagnostics).mkString
   }
 
@@ -399,6 +406,8 @@ class TestingClient(workspace: AbsolutePath, val buffers: Buffers)
             selectBspServer(params.getActions.asScala.toSeq)
           } else if (params.getMessage == ChooseBuildTool.message) {
             chooseBuildTool(params.getActions.asScala.toSeq)
+          } else if (BazelMbtNamespaceChoice.params() == params) {
+            chooseBazelMbtNamespaceMode
           } else if (MissingScalafmtConf.isCreateScalafmtConf(params)) {
             createScalaFmtConf
           } else if (params.getMessage() == MainClass.message) {
@@ -407,6 +416,8 @@ class TestingClient(workspace: AbsolutePath, val buffers: Buffers)
             switchBuildTool
           } else if (ImportScalaScript.params() == params) {
             importScalaCliScript
+          } else if (ChooseBuildServer.params("bazel") == params) {
+            selectedServer
           } else if (ResetWorkspace.params() == params) {
             resetWorkspace
           } else if (OldBloopVersionRunning.params() == params) {
@@ -437,6 +448,8 @@ class TestingClient(workspace: AbsolutePath, val buffers: Buffers)
               .params()
               .getMessage()
           ) {
+            new MessageActionItem("Ignore")
+          } else if (ImportProjectPartiallyFailed.params() == params) {
             new MessageActionItem("Ignore")
           } else if (
             List(true, false)
