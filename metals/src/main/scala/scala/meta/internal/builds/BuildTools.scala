@@ -311,7 +311,9 @@ final class BuildTools(
   )(implicit ec: ExecutionContext): List[MbtImportProvider] = {
     scriptImporterPaths match {
       case Nil =>
-        loadSupported().collect { case p: MbtImportProvider => p }
+        loadSupported(languageClient, tables).collect {
+          case p: MbtImportProvider => p
+        }
       case scripts =>
         scripts.map(script =>
           new ScriptMbtImporter(script, shellRunner, userConfig)

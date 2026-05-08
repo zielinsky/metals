@@ -42,9 +42,9 @@ import scala.meta.internal.metals.mbt.importer.MbtImportProvider
 import scala.meta.internal.metals.scalacli.ScalaCliServers
 import scala.meta.io.AbsolutePath
 
+import org.eclipse.lsp4j
 import org.eclipse.lsp4j.DidChangeWatchedFilesRegistrationOptions
 import org.eclipse.lsp4j.FileSystemWatcher
-import org.eclipse.lsp4j
 import org.eclipse.lsp4j.MessageParams
 import org.eclipse.lsp4j.MessageType
 import org.eclipse.lsp4j.Registration

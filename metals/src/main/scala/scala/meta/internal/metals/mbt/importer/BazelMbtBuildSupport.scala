@@ -47,6 +47,7 @@ object BazelMbtBuildSupport {
         MbtBuild(
           depModules,
           singleNamespace(workspaceNamespaceName, Set.empty, scalaVersion),
+          ju.Collections.emptyList(),
         )
       } else {
         MbtBuild.empty
@@ -134,7 +135,7 @@ object BazelMbtBuildSupport {
           scalaVersion,
         )
       }
-      MbtBuild(depModules, namespaces)
+      MbtBuild(depModules, namespaces, ju.Collections.emptyList())
     }
   }
 

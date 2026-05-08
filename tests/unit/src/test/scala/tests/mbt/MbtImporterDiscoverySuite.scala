@@ -78,6 +78,8 @@ class MbtImporterDiscoverySuite extends BaseSuite {
     val importers = buildTools(workspace).mbtImporters(
       shellRunner = null,
       userConfig = () => UserConfiguration(),
+      languageClient = None,
+      tables = None,
     )
     assertEquals(importers.length, 1)
     assert(importers.head.isInstanceOf[ScriptMbtImporter])
