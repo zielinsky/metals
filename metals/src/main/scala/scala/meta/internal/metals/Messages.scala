@@ -210,7 +210,7 @@ object Messages {
   }
 
   object ChooseBuildServer {
-    def bloop: MessageActionItem = new MessageActionItem("Use Bloop")
+    def bsp: MessageActionItem = new MessageActionItem("Use BSP")
     def mbt: MessageActionItem = new MessageActionItem("Use MBT")
     def notNow: MessageActionItem = Messages.notNow
 
@@ -220,7 +220,7 @@ object Messages {
         s"New $buildToolName workspace detected. Which build server would you like to use?"
       )
       params.setType(MessageType.Info)
-      params.setActions(List(bloop, mbt, notNow).asJava)
+      params.setActions(List(bsp, mbt, notNow).asJava)
       params
     }
   }

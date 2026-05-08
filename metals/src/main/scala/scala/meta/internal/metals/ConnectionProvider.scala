@@ -222,9 +222,11 @@ class ConnectionProvider(
                 connect(CreateSession(), progress).ignoreValue
               } else Future.unit
             }
-        } else if (item == Messages.ChooseBuildServer.bloop) {
-          tables.buildServers.chooseServer(BloopServers.name)
-          slowConnectToBuildServer(forceImport = true, progress).ignoreValue
+        } else if (item == Messages.ChooseBuildServer.bsp) {
+          slowConnectToStandardBuildServer(
+            forceImport = false,
+            progress,
+          ).ignoreValue
         } else {
           Future.unit
         }

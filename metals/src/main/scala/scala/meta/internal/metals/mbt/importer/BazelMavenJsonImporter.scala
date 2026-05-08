@@ -112,7 +112,6 @@ object BazelMavenJsonImporter {
       projectDir: AbsolutePath
   ): Seq[AbsolutePath] = {
     val configFiles = possibleConfigFiles(projectDir)
-
     configFiles.flatMap { configFile =>
       Try {
         val content = configFile.readText
