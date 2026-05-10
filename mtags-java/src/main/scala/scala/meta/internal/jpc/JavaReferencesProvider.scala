@@ -4,18 +4,20 @@ import javax.lang.model.element.Element
 
 import scala.jdk.CollectionConverters.SeqHasAsJava
 
+import scala.meta.internal.jpc.JavaMetalsCompiler
+import scala.meta.internal.jpc.SemanticdbSymbol
 import scala.meta.pc.OffsetParams
 import scala.meta.pc.ReferencesRequest
 import scala.meta.pc.ReferencesResult
 
 import com.sun.source.tree.CompilationUnitTree
-import com.sun.source.util.JavacTask
 import com.sun.source.util.Trees
 import org.eclipse.lsp4j.Location
 import org.eclipse.lsp4j.Range
 
 class JavaReferencesProvider(
-    params: ReferencesRequest
+    params: ReferencesRequest,
+    compiler: JavaMetalsCompiler
 ) {
 
   def references(): List[ReferencesResult] = {
@@ -55,19 +57,20 @@ class JavaReferencesProvider(
       symbol: String,
       params: ReferencesRequest
   ): PcReferencesResult = {
-    val task: JavacTask =
-      compiler.compilationTask(params.file().text(), params.file().uri())
-    val scanner = JavaMetalsGlobal.scanner(task)
+    val compile = compiler
+      .compilationTask(params.file())
+      .withAnalyzePhase()
+    val task = compile.task
     val trees = Trees.instance(task)
     val symbolScanner = new SymbolReferencesScanner(
       symbol,
       trees,
-      scanner.root,
+      compile.cu,
       params.file().text(),
       params.file().uri().toString(),
       params.includeDefinition()
     )
-    symbolScanner.scan(scanner.root, null)
+    symbolScanner.scan(compile.cu, null)
     PcReferencesResult(
       symbol,
       symbolScanner
@@ -81,15 +84,11 @@ class JavaReferencesProvider(
   private def findReferences(
       offsetParams: OffsetParams
   ): PcReferencesResult = {
-    val task: JavacTask =
-      compiler.compilationTask(offsetParams.text(), offsetParams.uri())
-    val scanner = JavaMetalsGlobal.scanner(task)
-    val trees = Trees.instance(task)
-    val position = compiler.positionFromParams(offsetParams)
-    val node = compiler.compilerTreeNode(scanner, position)
+    val node = compiler.nodeAtPosition(offsetParams, forReferences = true)
 
     node match {
-      case Some(treePath) =>
+      case Some((compile, treePath)) =>
+        val trees = Trees.instance(compile.task)
         val element = trees.getElement(treePath)
 
         def atIdentifier = compiler.isAtIdentifier(
@@ -98,11 +97,11 @@ class JavaReferencesProvider(
           offsetParams.text(),
           offsetParams.offset(),
           trees,
-          scanner.root
+          compile.cu
         )
         if (element != null && atIdentifier) {
           findAllReferences(
-            scanner.root,
+            compile.cu,
             element,
             trees,
             offsetParams.text(),
@@ -133,7 +132,7 @@ class JavaReferencesProvider(
       )
     scanner.scan(root, null)
 
-    val symbol = compiler.semanticdbSymbol(targetElement)
+    val symbol = SemanticdbSymbol.fromElement(targetElement)
     PcReferencesResult(
       symbol,
       scanner.result().reverse.distinctBy(_.getRange().toString()).asJava
@@ -173,7 +172,7 @@ class JavaReferencesProvider(
       uri: String,
       includeDefinition: Boolean
   ) extends ReferenceScanner[Location](
-        element => compiler.semanticdbSymbol(element).equals(targetElement),
+        element => SemanticdbSymbol.fromElement(element).equals(targetElement),
         trees,
         root,
         text,

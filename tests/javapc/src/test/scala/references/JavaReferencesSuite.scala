@@ -407,7 +407,4 @@ class JavaReferencesSuite extends BaseJavaPCSuite with RangeReplace {
       )
     }
 
-  private def packageName(name: String): String = {
-    name.toLowerCase.split(" ").mkString("_").replaceAll("-", "_")
-  }
 }

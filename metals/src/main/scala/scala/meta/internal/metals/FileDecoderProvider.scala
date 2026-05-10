@@ -40,7 +40,6 @@ import scala.meta.metap.Format.Detailed
 import scala.meta.metap.Settings
 
 import ch.epfl.scala.bsp4j.BuildTargetIdentifier
-import coursier.Dependency
 
 /* Response which is sent to the lsp client. Because of java serialization we cannot use
  * sealed hierarchy to model union type of success and error.

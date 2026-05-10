@@ -23,9 +23,7 @@ import scala.meta.io.AbsolutePath
 import ch.epfl.scala.debugadapter.ScalaVersion
 import coursier.LocalRepositories
 import coursier.paths.CoursierPaths
-import coursierapi.Dependency
 import coursierapi.error.SimpleResolutionError
-import scalafix.interfaces.Scalafix
 
 object DownloadDependencies {
 

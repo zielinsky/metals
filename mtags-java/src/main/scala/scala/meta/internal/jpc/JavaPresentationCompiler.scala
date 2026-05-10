@@ -28,6 +28,8 @@ import scala.meta.internal.metals.ReportLevel
 import scala.meta.internal.metals.StdReportContext
 import scala.meta.internal.pc.DefinitionResultImpl
 import scala.meta.internal.pc.EmptySymbolSearch
+import scala.meta.internal.pc.JavaReferencesProvider
+import scala.meta.internal.pc.JavaRenameProvider
 import scala.meta.internal.pc.PresentationCompilerConfigImpl
 import scala.meta.pc.AutoImportsResult
 import scala.meta.pc.DefinitionResult
@@ -168,7 +170,9 @@ case class JavaPresentationCompiler(
       params: OffsetParams,
       name: String
   ): CompletableFuture[util.List[TextEdit]] =
-    CompletableFuture.completedFuture(Nil.asJava)
+    request(params, util.Collections.emptyList[TextEdit]()) { pc =>
+      new JavaRenameProvider(pc, params, Some(name)).rename().asJava
+    }
 
   override def definition(
       params: OffsetParams
@@ -194,7 +198,10 @@ case class JavaPresentationCompiler(
   override def references(
       params: ReferencesRequest
   ): CompletableFuture[util.List[ReferencesResult]] =
-    CompletableFuture.completedFuture(Nil.asJava)
+    request(params.file(), util.Collections.emptyList[ReferencesResult]()) {
+      pc =>
+        new JavaReferencesProvider(params, pc).references().asJava
+    }
 
   override def getTasty(
       targetUri: URI,
@@ -237,7 +244,6 @@ case class JavaPresentationCompiler(
   override def inlayHints(
       params: InlayHintsParams
   ): CompletableFuture[util.List[lsp4j.InlayHint]] =
-    // TODO
     CompletableFuture.completedFuture(Nil.asJava)
 
   override def didChange(
@@ -385,7 +391,9 @@ case class JavaPresentationCompiler(
   override def prepareRename(
       params: OffsetParams
   ): CompletableFuture[Optional[lsp4j.Range]] =
-    CompletableFuture.completedFuture(Optional.empty())
+    request(params, Optional.empty[lsp4j.Range]()) { pc =>
+      new JavaRenameProvider(pc, params, None).prepareRename()
+    }
 
   implicit class XtensionParams(params: VirtualFileParams) {
     def toQueryContext: PcQueryContext =

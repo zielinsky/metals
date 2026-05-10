@@ -4,6 +4,8 @@ import javax.lang.model.element.Element
 
 import scala.collection.mutable.ListBuffer
 
+import scala.meta.internal.jpc.JavaMetalsCompiler
+
 import com.sun.source.tree.CompilationUnitTree
 import com.sun.source.tree.Tree
 import com.sun.source.util.TreePath
@@ -16,7 +18,7 @@ abstract class ReferenceScanner[T](
     trees: Trees,
     root: CompilationUnitTree,
     text: String,
-    compiler: JavaMetalsGlobal,
+    compiler: JavaMetalsCompiler,
     includeDefinition: Boolean
 ) extends TreePathScanner[Void, Void] {
   private val elementBuffer: ListBuffer[T] = new ListBuffer[T]

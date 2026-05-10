@@ -23,6 +23,7 @@ class BuildToolProvider(
   private val buildToolSelector: BuildToolSelector = new BuildToolSelector(
     languageClient,
     tables,
+    preferredBuildServer,
     userConfig,
   )
 

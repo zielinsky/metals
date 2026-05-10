@@ -41,7 +41,7 @@ import scala.meta.io.AbsolutePath
 import ch.epfl.scala.bsp4j._
 import ch.epfl.scala.{bsp4j => b}
 import com.google.gson.GsonBuilder
-import coursier.Fetch
+import coursierapi.Dependency
 import org.eclipse.lsp4j.jsonrpc.Launcher
 
 /**
@@ -232,18 +232,20 @@ object Bill {
     override def buildTargetDependencySources(
         params: DependencySourcesParams
     ): CompletableFuture[DependencySourcesResult] = {
-      val scalaLib = Embedded.dependencyOf(
+      val scalaLib = Dependency.of(
         "org.scala-lang",
         "scala-library",
         mtags.BuildInfo.scalaCompilerVersion,
       )
 
       CompletableFuture.completedFuture {
-        val sources = Fetch()
-          .withDependencies(Seq(scalaLib))
-          .addRepositories(Embedded.repositories: _*)
-          .run()
+        val sources = coursierapi.Fetch
+          .create()
+          .withDependencies(scalaLib)
+          .addRepositories(CoursierHelpers.defaultRepositories: _*)
+          .fetch()
           .map(_.toPath)
+          .asScala
 
         new DependencySourcesResult(
           List(

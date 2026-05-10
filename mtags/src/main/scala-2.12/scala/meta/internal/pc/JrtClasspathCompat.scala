@@ -40,7 +40,7 @@ object JrtClasspathCompat {
     } catch {
       case e: Exception =>
         e.printStackTrace()
-        logger.warning(
+        logger.warn(
           s"Failed to clear JrtClassPath caches: ${e.getMessage}"
         )
         false

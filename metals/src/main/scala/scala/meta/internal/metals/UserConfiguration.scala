@@ -373,6 +373,12 @@ case class UserConfiguration(
           )
         ),
         optStringField("mcpClient", mcpClient),
+        Some(
+          (
+            "defaultBspToBuildTool",
+            defaultBspToBuildTool,
+          )
+        ),
       ).flatten
     )
     val gson = new GsonBuilder().setPrettyPrinting().create()

@@ -1,5 +1,6 @@
 package tests.index
 
+import scala.meta.dialects.Scala213
 import scala.meta.internal.metals.Buffers
 import scala.meta.internal.metals.MetalsEnrichments._
 import scala.meta.internal.metals.PositionSyntax.XtensionPositionsScalafix
@@ -26,7 +27,10 @@ class ClasspathDefinitionIndexSuite extends munit.FunSuite {
   )(implicit loc: munit.Location): Unit = {
     test(name) {
       val index =
-        new ClasspathDefinitionIndex(mtags = () => Mtags.testingSingleton)
+        new ClasspathDefinitionIndex(
+          mtags = () => Mtags.testingSingleton,
+          dialect = Scala213,
+        )
       libs().asModules.foreach(module => index.addDependencyModule(module))
 
       val defns = index.definitions(Symbol(symbol))

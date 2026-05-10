@@ -1677,10 +1677,14 @@ class Compilers(
       if (shouldShutdown)
         scribe.debug(s"starting uncached presentation compiler for $targetId")
       val compiler = Option(out.await)
-      val result = compiler.map(f(_, javaCompiler))
+      val result = compiler.flatMap { pc =>
+        javaCompiler.map { jc =>
+          f(pc, jc)
+        }
+      }
       if (shouldShutdown) {
         compiler.foreach(_.shutdown())
-        javaCompiler.shutdown()
+        javaCompiler.foreach(_.shutdown())
       }
       result
     }

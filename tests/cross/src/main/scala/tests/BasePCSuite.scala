@@ -25,8 +25,6 @@ import coursierapi.Fetch
 import coursierapi.MavenRepository
 import coursierapi.Repository
 import munit.Tag
-import org.eclipse.lsp4j.MarkupContent
-import org.eclipse.lsp4j.jsonrpc.messages.{Either => JEither}
 import org.slf4j.LoggerFactory
 
 abstract class BasePCSuite extends BaseSuite with PCSuite {

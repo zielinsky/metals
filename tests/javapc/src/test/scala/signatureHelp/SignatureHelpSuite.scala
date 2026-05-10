@@ -267,7 +267,6 @@ class SignatureHelpSuite extends BaseJavaSignatureHelpSuite {
        |   String(byte[] ascii, int hibyte)
        |   String(byte[] bytes, int offset, int length, java.lang.String charsetName)
        |   String(byte[] bytes, int offset, int length, java.nio.charset.Charset charset)
-       |   String(java.nio.charset.Charset charset, byte[] bytes, int offset, int length)
        |   String(byte[] bytes, java.lang.String charsetName)
        |   String(byte[] bytes, java.nio.charset.Charset charset)
        |   String(byte[] bytes, int offset, int length)

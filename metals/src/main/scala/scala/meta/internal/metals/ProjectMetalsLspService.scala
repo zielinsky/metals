@@ -112,19 +112,13 @@ class ProjectMetalsLspService(
 
   override def indexer: Indexer = connectionProvider
   def buildServerPromise = connectionProvider.buildServerPromise
+
   def connect[T](config: ConnectRequest): Future[BuildChange] =
     workDoneProgress.trackProgressFuture(
       config.userMessage,
       progress => connectionProvider.Connect.connect(config, progress),
       metricName = config.metricName,
-    
-
-  def isOnlyScalaCli: Boolean = {
-    buildTools.loadSupported() match {
-      case (_: ScalaCliBuildTool) :: Nil => true
-      case _ => false
-    }
-  }
+    )
 
   override val fileWatcher: FileWatcher =
     if (Testing.isEnabled && !Testing.isFileWatchingDisabled)

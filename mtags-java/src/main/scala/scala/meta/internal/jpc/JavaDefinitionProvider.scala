@@ -187,11 +187,8 @@ class JavaDefinitionProvider(
         sourcePositions
       )
       val range = new l.Range(
-        offsetToPosition(start, params.text()),
-        offsetToPosition(
-          end,
-          params.text()
-        )
+        compiler.offsetToPosition(start, params.text()),
+        compiler.offsetToPosition(end, params.text())
       )
       List(new l.Location(params.uri().toString(), range))
     } else {
@@ -253,23 +250,6 @@ class JavaDefinitionProvider(
         )
     }
   }
-
-  private def offsetToPosition(offset: Int, text: String): l.Position = {
-    var line = 0
-    var character = 0
-    var i = 0
-    while (i < offset && i < text.length()) {
-      if (text.charAt(i) == '\n') {
-        line += 1
-        character = 0
-      } else {
-        character += 1
-      }
-      i += 1
-    }
-    new l.Position(line, character)
-  }
-
 }
 
 private sealed abstract class DefinitionSource

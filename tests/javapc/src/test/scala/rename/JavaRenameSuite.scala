@@ -621,7 +621,6 @@ class JavaRenameSuite extends BaseJavaPCSuite with RangeReplace {
   def check(
       name: TestOptions,
       original: String,
-      automaticPackage: Boolean = true,
   )(implicit location: Location): Unit =
     test(name) {
       val pkg = packageName(name.name)
@@ -630,9 +629,7 @@ class JavaRenameSuite extends BaseJavaPCSuite with RangeReplace {
       val base =
         original.replaceAll("@@", "").replaceAll("\\<\\<\\S*\\>\\>", newName)
 
-      val packagePrefix =
-        if (automaticPackage) s"package $pkg;\n"
-        else ""
+      val packagePrefix = s"package $pkg;\n"
 
       val codeOriginal = packagePrefix + edit
       val expectedCode = packagePrefix + base
@@ -662,7 +659,7 @@ class JavaRenameSuite extends BaseJavaPCSuite with RangeReplace {
       name: TestOptions,
       input: String,
       filename: String = "Rename.java",
-  ): Unit = {
+  )(implicit location: Location): Unit = {
     test(name) {
       val edit = input.replaceAll("(<<|>>)", "")
       val expected =
@@ -689,7 +686,4 @@ class JavaRenameSuite extends BaseJavaPCSuite with RangeReplace {
     }
   }
 
-  private def packageName(name: String): String = {
-    name.toLowerCase.split(" ").mkString("_").replaceAll("-", "_")
-  }
 }

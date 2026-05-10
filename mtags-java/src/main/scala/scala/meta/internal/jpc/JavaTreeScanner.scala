@@ -22,7 +22,8 @@ import org.slf4j.Logger
 class JavaTreeScanner(
     logger: Logger,
     task: JavacTask,
-    var root: CompilationUnitTree
+    var root: CompilationUnitTree,
+    forReferences: Boolean = false
 ) extends TreePathScanner[TreePath, CursorPosition] {
 
   var lastVisitedParentTrees: List[TreePath] = Nil
@@ -116,7 +117,7 @@ class JavaTreeScanner(
     if (start <= p.start && p.end <= end) {
       lastVisitedParentTrees = getCurrentPath :: lastVisitedParentTrees
     }
-    super.visitMethod(node, p)
+    visitNode(node, p, super.visitMethod)
   }
 
   override def visitVariable(
@@ -137,11 +138,6 @@ class JavaTreeScanner(
     visitNode(node, p, super.visitClass)
   }
 
-  override def visitMethod(node: MethodTree, p: CursorPosition): TreePath = {
-
-    visitNode(node, p, super.visitMethod)
-  }
-
   override def visitNewClass(
       node: NewClassTree,
       p: CursorPosition
@@ -152,7 +148,12 @@ class JavaTreeScanner(
 
     if (start <= p.start && p.end <= end) {
       lastVisitedParentTrees = getCurrentPath :: lastVisitedParentTrees
-      super.visitNewClass(node, p)
+      if (forReferences) {
+        // we don't eed the constructor element for references
+        super.visitNewClass(node, p)
+      } else {
+        getCurrentPath()
+      }
     } else {
       super.visitNewClass(node, p)
       visitNode(node, p, super.visitNewClass)

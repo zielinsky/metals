@@ -32,7 +32,7 @@ class DelegatingLanguageClient(var underlying: MetalsLanguageClient)
   override def metalsSyncModes(params: MetalsSyncModesParams): Unit = {
     underlying.metalsSyncModes(params)
   }
-  
+
   override def showMessageRequest(
       params: ShowMessageRequestParams,
       defaultTo: () => MessageActionItem,

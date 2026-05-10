@@ -766,12 +766,13 @@ class ConnectionProvider(
             )
             .asScala
             .foreach {
-            case action if action == IncompatibleBloopVersion.shutdown =>
-              connect(new CreateSession(true), progress)
-            case action if action == IncompatibleBloopVersion.dismissForever =>
-              notification.dismissForever()
-            case _ =>
-          }
+              case action if action == IncompatibleBloopVersion.shutdown =>
+                connect(new CreateSession(true), progress)
+              case action
+                  if action == IncompatibleBloopVersion.dismissForever =>
+                notification.dismissForever()
+              case _ =>
+            }
         }
       }
     }

@@ -17,6 +17,7 @@ import scala.util.Properties
 import scala.util.control.NonFatal
 
 import scala.meta.internal.builds.ShellRunner
+import scala.meta.internal.metals.MetalsEnrichments._
 import scala.meta.internal.pc.ScalaPresentationCompiler
 import scala.meta.internal.semver.SemVer
 import scala.meta.internal.semver.SemVer.Version
@@ -454,7 +455,6 @@ object Embedded {
       scalaVersion: Option[String] = None,
       classfiers: Seq[String] = Seq.empty,
       resolution: Option[ResolutionParams] = None,
-      customRepositories: List[String] = Nil,
   ): List[Path] = try {
     val settings = fetchSettings(dep, scalaVersion, resolution)
       .addClassifiers(classfiers.map(Classifier(_)): _*)
@@ -574,9 +574,8 @@ object Embedded {
   }
 
   def downloadMtags(scalaVersion: String, metalsVersion: String): List[Path] = {
-    val (dependency, mtagsScalaVersion) =
-      mtagsDependency(scalaVersion, metalsVersion)
-    downloadDependency(dependency, Some(mtagsScalaVersion))
+    val dependency = mtagsDependency(scalaVersion, metalsVersion)
+    downloadDependency(dependency, Some(scalaVersion))
   }
 
   def downloadScala3PresentationCompiler(scalaVersion: String): List[Path] =

@@ -7,16 +7,16 @@ import javax.lang.model.element.Modifier
 
 import scala.annotation.tailrec
 
+import scala.meta.internal.jpc.JavaMetalsCompiler
 import scala.meta.pc.OffsetParams
 
 import com.sun.source.tree.CompilationUnitTree
-import com.sun.source.util.JavacTask
 import com.sun.source.util.Trees
 import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.TextEdit
 
 class JavaRenameProvider(
-    compiler: JavaMetalsGlobal,
+    compiler: JavaMetalsCompiler,
     params: OffsetParams,
     name: Option[String]
 ) {
@@ -43,15 +43,12 @@ class JavaRenameProvider(
   }
 
   def prepareRename(): Optional[Range] = {
-    val task: JavacTask =
-      compiler.compilationTask(params.text(), params.uri())
-    val scanner = JavaMetalsGlobal.scanner(task)
-    val trees = Trees.instance(task)
-    val position = compiler.positionFromParams(params)
-    val node = compiler.compilerTreeNode(scanner, position)
+    val node = compiler.nodeAtPosition(params, forReferences = true)
     node match {
-      case Some(treePath) =>
+      case Some((compile, treePath)) =>
+        val trees = Trees.instance(compile.task)
         val element = trees.getElement(treePath)
+
         // TODO also make sure that it's a local symbol
         def atIdentifier = compiler.isAtIdentifier(
           treePath,
@@ -59,21 +56,21 @@ class JavaRenameProvider(
           params.text(),
           params.offset(),
           trees,
-          scanner.root
+          compile.cu
         )
         if (element != null && canRenameSymbol(element) && atIdentifier) {
           val sourcePositions = trees.getSourcePositions()
           val start =
-            sourcePositions.getStartPosition(scanner.root, treePath.getLeaf())
+            sourcePositions.getStartPosition(compile.cu, treePath.getLeaf())
           val end =
-            sourcePositions.getEndPosition(scanner.root, treePath.getLeaf())
+            sourcePositions.getEndPosition(compile.cu, treePath.getLeaf())
           val (realStart, realEnd) = compiler.findIndentifierStartAndEnd(
             params.text(),
             element.getSimpleName().toString(),
             start.toInt,
             end.toInt,
             treePath.getLeaf(),
-            scanner.root,
+            compile.cu,
             sourcePositions
           )
           val range = new Range(
@@ -91,15 +88,11 @@ class JavaRenameProvider(
   private def findReferences(
       offsetParams: OffsetParams
   ): List[TextEdit] = {
-    val task: JavacTask =
-      compiler.compilationTask(offsetParams.text(), offsetParams.uri())
-    val scanner = JavaMetalsGlobal.scanner(task)
-    val trees = Trees.instance(task)
-    val position = compiler.positionFromParams(offsetParams)
-    val node = compiler.compilerTreeNode(scanner, position)
+    val node = compiler.nodeAtPosition(params, forReferences = true)
 
     node match {
-      case Some(treePath) =>
+      case Some((compile, treePath)) =>
+        val trees = Trees.instance(compile.task)
         val element = trees.getElement(treePath)
 
         def atIdentifier = compiler.isAtIdentifier(
@@ -108,11 +101,11 @@ class JavaRenameProvider(
           params.text(),
           params.offset(),
           trees,
-          scanner.root
+          compile.cu
         )
         if (element != null && canRenameSymbol(element) && atIdentifier) {
           findAllReferences(
-            scanner.root,
+            compile.cu,
             element,
             trees,
             offsetParams.text()

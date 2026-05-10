@@ -58,7 +58,6 @@ class SignatureHelpDocumentationSuite extends BaseJavaSignatureHelpSuite {
        |""".stripMargin,
   )
 
-
   check(
     "inherited-docs",
     """
@@ -86,9 +85,8 @@ class SignatureHelpDocumentationSuite extends BaseJavaSignatureHelpSuite {
     """|=> myMethod(int x, java.lang.String y)
        |                   ^^^^^^^^^^^^^^^^^^
        |   This method does something important.
-       |""".stripMargin
+       |""".stripMargin,
   )
-
 
   check(
     "nested-docs",
@@ -141,6 +139,6 @@ class SignatureHelpDocumentationSuite extends BaseJavaSignatureHelpSuite {
        |
        |The representation is exactly the one returned by the
        |`Double.toString` method of one argument.
-       |""".stripMargin
+       |""".stripMargin,
   )
 }

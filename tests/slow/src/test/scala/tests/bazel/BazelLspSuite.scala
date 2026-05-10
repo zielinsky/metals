@@ -8,8 +8,8 @@ import scala.meta.internal.builds.BazelDigest
 import scala.meta.internal.builds.ShellRunner
 import scala.meta.internal.metals.DecoderResponse
 import scala.meta.internal.metals.Directories
-import scala.meta.internal.metals.EmptyWorkDoneProgress
 import scala.meta.internal.metals.Embedded
+import scala.meta.internal.metals.EmptyWorkDoneProgress
 import scala.meta.internal.metals.FileDecoderProvider
 import scala.meta.internal.metals.Messages
 import scala.meta.internal.metals.Messages._
