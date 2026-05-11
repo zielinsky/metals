@@ -28,7 +28,7 @@ object BazelQuery {
   }
 
   def fullInformationQuery(targets: List[String]): BazelQuery = {
-    val query = s"set(${targets.mkString(" ")})"
+    val query = s"deps(set(${targets.mkString(" ")}))"
     BazelQuery(query, outputMode = "xml")
   }
 
