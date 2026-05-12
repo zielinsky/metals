@@ -757,7 +757,7 @@ object BazelMavenJsonImporter {
       jarName: String,
   ): Option[AbsolutePath] = {
     Try {
-      val entries = extDir.list
+      val entries: List[AbsolutePath] = extDir.list.toList
 
       // Look for directory matching Bazel 7.x pattern: rules_jvm_external~{version}~maven~{artifactDir}
       val bazel7Dir = entries.find { entry =>
@@ -823,12 +823,6 @@ object BazelMavenJsonImporter {
           }
         }.toList
 
-        if (candidateRepositories.nonEmpty) {
-          scribe.debug(
-            s"bzlmod maven repositories: ${candidateRepositories.map(_.filename).mkString(", ")}"
-          )
-        }
-
         val repositoryRelativePaths = relativePaths.flatMap { path =>
           bzlmodRepositoryNames.flatMap { repo =>
             Seq(
@@ -839,17 +833,21 @@ object BazelMavenJsonImporter {
           }
         }.distinct
 
-        candidateRepositories
-          .flatMap { repo =>
-            repositoryRelativePaths
-              .map(path => repo.resolve(path))
-              .find(_.exists)
-          }
-          .headOption
-          .map { path =>
-            scribe.debug(s"Found Bzlmod maven JAR: $path")
-            path
-          }
+        val found = candidateRepositories.flatMap { repo =>
+          repositoryRelativePaths
+            .map(path => repo.resolve(path))
+            .find(_.exists)
+        }.headOption
+
+        if (candidateRepositories.nonEmpty && found.isEmpty) {
+          scribe.warn(
+            s"JAR not found in central maven repos " +
+              s"${candidateRepositories.map(_.filename).mkString(", ")}; " +
+              s"tried: [${repositoryRelativePaths.mkString(", ")}]"
+          )
+        }
+
+        found
       }.getOrElse(None)
     }
   }
