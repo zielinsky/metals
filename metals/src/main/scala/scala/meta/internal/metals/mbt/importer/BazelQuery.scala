@@ -15,6 +15,15 @@ object BazelQuery {
       javaHome: Option[String],
   )
 
+  sealed abstract class OutputMode(name: String) {
+    override def toString(): String = name
+  }
+  object OutputMode {
+    case object Label extends OutputMode("label")
+    case object Xml extends OutputMode("xml")
+  }
+  import OutputMode._
+
   def buildRuleKindsQuery(patterns: List[String]): BazelQuery = {
     val ps =
       if (patterns.isEmpty) BazelProjectViewTargets.defaultPatterns
@@ -24,16 +33,16 @@ object BazelQuery {
       p <- ps
     } yield s"kind($k, $p)"
     val query = parts.mkString(" union ")
-    BazelQuery(query, outputMode = "label")
+    BazelQuery(query, outputMode = Label)
   }
 
   def fullInformationQuery(targets: List[String]): BazelQuery = {
     val query = s"deps(set(${targets.mkString(" ")}))"
-    BazelQuery(query, outputMode = "xml")
+    BazelQuery(query, outputMode = Xml)
   }
 
   def allScalaLibrariesQuery: BazelQuery =
-    BazelQuery("filter('scala.library', deps(//...))", outputMode = "label")
+    BazelQuery("filter('scala.library', deps(//...))", outputMode = Label)
 
   private val ruleKinds: List[String] =
     List(
@@ -45,13 +54,9 @@ object BazelQuery {
 
 case class BazelQuery(
     query: String,
-    // Allowed values: "label", "xml"
-    // TODO replace with a case class or enum
-    outputMode: String,
+    outputMode: BazelQuery.OutputMode,
 ) {
   import BazelQuery.Env
-  def output(outputMode: String): BazelQuery =
-    this.copy(outputMode = outputMode)
 
   def run(
       env: Env
