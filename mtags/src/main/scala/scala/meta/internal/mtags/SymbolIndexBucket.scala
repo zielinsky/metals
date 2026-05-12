@@ -46,7 +46,8 @@ class SymbolIndexBucket(
     toIndexSource: AbsolutePath => AbsolutePath = identity
 ) {
   private val logger = LoggerFactory.getLogger(classOf[SymbolIndexBucket])
-  private val classpathDefinitionIndex = new ClasspathDefinitionIndex(mtags)
+  private val classpathDefinitionIndex =
+    new ClasspathDefinitionIndex(mtags, dialect)
 
   def close(): Unit = sourceJars.close()
 

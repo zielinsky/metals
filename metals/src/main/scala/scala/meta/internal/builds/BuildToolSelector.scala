@@ -7,6 +7,7 @@ import scala.meta.internal.metals.Messages
 import scala.meta.internal.metals.Messages.ChooseBuildTool
 import scala.meta.internal.metals.MetalsEnrichments._
 import scala.meta.internal.metals.Tables
+import scala.meta.internal.metals.UserConfiguration
 import scala.meta.internal.metals.clients.language.MetalsLanguageClient
 
 import org.eclipse.lsp4j.MessageActionItem
@@ -19,6 +20,7 @@ final class BuildToolSelector(
     languageClient: MetalsLanguageClient,
     tables: Tables,
     preferredBuildServer: Future[Option[String]],
+    userConfig: () => UserConfiguration,
 )(implicit ec: ExecutionContext) {
   def checkForChosenBuildTool(
       buildTools: List[BuildTool]
@@ -38,7 +40,26 @@ final class BuildToolSelector(
               )
               .flatMap {
                 case Some(bt) => Future.successful(Some(bt))
-                case None => requestBuildToolChoice(buildTools)
+                case None =>
+
+                  // Check if user has configured a preferred build tool
+                  userConfig().targetBuildTool match {
+                    case Some(preferredTool) =>
+                      buildTools.find(_.executableName == preferredTool) match {
+                        case Some(buildTool) =>
+                          tables.buildTool.chooseBuildTool(
+                            buildTool.executableName
+                          )
+                          Future.successful(Some(buildTool))
+                        case None =>
+                          scribe.warn(
+                            s"Configured target-build-tool '$preferredTool' not found in available build tools: ${buildTools.map(_.executableName).mkString(", ")}"
+                          )
+                          requestBuildToolChoice(buildTools)
+                      }
+                    case None =>
+                      requestBuildToolChoice(buildTools)
+                  }
               }
         }
     }
@@ -47,7 +68,21 @@ final class BuildToolSelector(
       buildTools: List[BuildTool]
   ): Future[Option[BuildTool]] = {
     languageClient
-      .showMessageRequest(ChooseBuildTool.params(buildTools))
+      .showMessageRequest(
+        ChooseBuildTool.params(buildTools),
+        defaultTo = () => {
+          val tool = userConfig().targetBuildTool
+            .flatMap { tool =>
+              buildTools.find(_.executableName == tool)
+            }
+            .orElse(buildTools.headOption)
+            .getOrElse {
+              throw new IllegalStateException("No build tool found")
+            }
+          languageClient.showMessage(ChooseBuildTool.notificationParams(tool))
+          new MessageActionItem(tool.executableName)
+        },
+      )
       .asScala
       .map { choice =>
         val foundBuildTool = buildTools.find(buildTool =>
@@ -67,7 +102,16 @@ final class BuildToolSelector(
     languageClient
       .showMessageRequest(
         Messages.NewBuildToolDetected
-          .params(newBuildTool.executableName, currentBuildTool.executableName)
+          .params(newBuildTool.executableName, currentBuildTool.executableName),
+        defaultTo = () => {
+          languageClient.showMessage(
+            Messages.NewBuildToolDetected.notificationParams(
+              newBuildTool.executableName,
+              currentBuildTool.executableName,
+            )
+          )
+          Messages.NewBuildToolDetected.dontSwitch
+        },
       )
       .asScala
       .map {

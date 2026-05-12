@@ -44,6 +44,7 @@ import scala.meta.internal.metals.debug.BuildTargetClasses
 import scala.meta.internal.metals.debug.BuildTargetClassesFinder
 import scala.meta.internal.metals.debug.DebugDiscovery
 import scala.meta.internal.metals.debug.DebugProvider
+import scala.meta.internal.metals.debug.DiscoveryFailures
 import scala.meta.internal.metals.doctor.Doctor
 import scala.meta.internal.metals.doctor.HeadDoctor
 import scala.meta.internal.metals.doctor.MetalsServiceInfo
@@ -1187,7 +1188,6 @@ abstract class MetalsLspService(
         val fingerprint = fingerprints.add(path, FileIO.slurp(path, charset))
         (path, fingerprint)
       }
-
     Future
       .sequence(
         List(
@@ -1683,7 +1683,21 @@ abstract class MetalsLspService(
   ): Future[ApplyWorkspaceEditResponse] = {
     metalsPasteProvider
       .didPaste(params, EmptyCancelToken)
-      .flatMap(optEdit => applyEdits(params.textDocument.getUri(), optEdit))
+      .flatMap { optEdit =>
+        val didPasteEdits = rangeFormattingProvider.format(
+          new DocumentRangeFormattingParams(
+            params.textDocument,
+            new FormattingOptions(),
+            params.range,
+          ),
+          folder,
+          EmptyCancelToken,
+        )
+        applyEdits(
+          params.textDocument.getUri(),
+          optEdit ++ didPasteEdits,
+        )
+      }
   }
 
   protected def applyEdits(
@@ -1823,7 +1837,7 @@ abstract class MetalsLspService(
     stacktraceAnalyzer.resolveStacktraceLocationCommand(stacktraceLine)
 
   def findBuildTargetByDisplayName(target: String): Option[b.BuildTarget] =
-    buildTargets.findByDisplayName(target)
+    buildTargets.findByDisplayNameOrUri(target)
 
   def willRenameFile(
       oldPath: AbsolutePath,
@@ -1930,7 +1944,7 @@ abstract class MetalsLspService(
       .flatMap(buildTargets.inverseSources(_))
       .orElse {
         Option(params.buildTarget)
-          .flatMap(buildTargets.findByDisplayName)
+          .flatMap(buildTargets.findByDisplayNameOrUri)
           .map(_.getId())
       }
 
@@ -1938,7 +1952,13 @@ abstract class MetalsLspService(
       case Some(target) =>
         compilations
           .compileTarget(target)
-          .flatMap(_ => action(params))
+          .flatMap { result =>
+            if (result.getStatusCode == b.StatusCode.CANCELLED) {
+              Future.failed(DiscoveryFailures.WorkspaceResetException)
+            } else {
+              action(params)
+            }
+          }
       case None =>
         action(params)
     }

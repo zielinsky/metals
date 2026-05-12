@@ -188,7 +188,13 @@ final class BloopServers(
           )
           languageClient
             .showMessageRequest(
-              Messages.BloopJvmPropertiesChange.params()
+              Messages.BloopJvmPropertiesChange.params(),
+              defaultTo = () => {
+                languageClient.showMessage(
+                  Messages.BloopJvmPropertiesChange.notificationParams()
+                )
+                Messages.BloopJvmPropertiesChange.notNow
+              },
             )
             .asScala
             .flatMap {
@@ -517,7 +523,7 @@ object BloopServers {
 
     try {
       val cp = Embedded
-        .downloadDependency(coursierapi.Dependency.of(org, name, version))
+        .downloadDependency(org, name, version)
         .map(_.toFile())
       Right(cp)
     } catch {

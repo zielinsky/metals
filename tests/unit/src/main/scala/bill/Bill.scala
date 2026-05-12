@@ -42,7 +42,6 @@ import ch.epfl.scala.bsp4j._
 import ch.epfl.scala.{bsp4j => b}
 import com.google.gson.GsonBuilder
 import coursierapi.Dependency
-import coursierapi.Fetch
 import org.eclipse.lsp4j.jsonrpc.Launcher
 
 /**
@@ -240,7 +239,7 @@ object Bill {
       )
 
       CompletableFuture.completedFuture {
-        val sources = Fetch
+        val sources = coursierapi.Fetch
           .create()
           .withDependencies(scalaLib)
           .addRepositories(CoursierHelpers.defaultRepositories: _*)

@@ -48,11 +48,10 @@ final class BspConfigGenerator(
             workspace.resolve(Directories.bsp).createDirectories()
             val buildToolBspDir = buildTool.projectRoot.resolve(Directories.bsp)
             val workspaceBspDir = workspace.resolve(Directories.bsp).toNIO
-            buildToolBspDir.toFile.listFiles().foreach { file =>
-              val path = file.toPath()
-              if (!file.isDirectory() && path.filename.endsWith(".json")) {
-                val to = workspaceBspDir.resolve(path.filename)
-                Files.move(path, to, StandardCopyOption.REPLACE_EXISTING)
+            buildToolBspDir.list.foreach { file =>
+              if (!file.isDirectory && file.isJson) {
+                val to = workspaceBspDir.resolve(file.filename)
+                Files.move(file.toNIO, to, StandardCopyOption.REPLACE_EXISTING)
               }
             }
             buildToolBspDir.deleteRecursively()
@@ -70,7 +69,21 @@ final class BspConfigGenerator(
       buildTools: List[BuildServerProvider]
   ): Future[Option[BuildServerProvider]] = {
     languageClient
-      .showMessageRequest(BspProvider.params(buildTools))
+      .showMessageRequest(
+        BspProvider.params(buildTools),
+        defaultTo = () => {
+          val tool = userConfig().targetBuildTool
+            .flatMap { tool =>
+              buildTools.find(_.buildServerName == tool)
+            }
+            .orElse(buildTools.headOption)
+            .getOrElse {
+              throw new IllegalStateException("No build tool found")
+            }
+          languageClient.showMessage(BspProvider.notificationParams(tool))
+          new MessageActionItem(tool.executableName)
+        },
+      )
       .asScala
       .map { choice =>
         buildTools.find(buildTool =>

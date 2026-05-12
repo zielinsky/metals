@@ -90,9 +90,9 @@ class MetalsPasteSuite
         |}
         |""".stripMargin,
     """|package to
-       |import scala.util.Try
        |import example.from.Foo
        |import example.utils.{Bar => Baz}
+       |import scala.util.Try
        |
        |object Copy {
        |  def t = Try(true)
@@ -138,9 +138,9 @@ class MetalsPasteSuite
         |}
         |""".stripMargin,
     """|package to
+       |import example.from.Foo
        |import scala.util.Try
        |import example.{utils => u}
-       |import example.from.Foo
        |
        |object Copy {
        |  def t = Try(true)
@@ -278,7 +278,7 @@ class MetalsPasteSuite
         |import example.utils.TestObject.testVal
         |
         |object Main {
-        |  <<from<<val x = testMethod("123") 
+        |  <<from<<val x = testMethod("123")
         |  val y = testVal>>from>>
         |}
         |
@@ -295,7 +295,7 @@ class MetalsPasteSuite
        |import example.utils.TestObject.testVal
        |
        |object Copy {
-       |  val x = testMethod("123") 
+       |  val x = testMethod("123")
        |  val y = testVal
        |}
        |""".stripMargin,

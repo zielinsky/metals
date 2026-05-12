@@ -4,6 +4,7 @@ object V {
   val scala210 = "2.10.7"
 
   val scala211 = "2.11.12"
+
   val scala212 = "2.12.21"
 
   val scala213 = "2.13.18"
@@ -12,7 +13,7 @@ object V {
 
   val scala3ForSBT2 = "3.7.2"
 
-  val latestScala3Next = "3.7.3"
+  val latestScala3Next = "3.8.0-RC1"
 
   // When you can add to removedScalaVersions in MtagsResolver.scala with the last released version
   val sbtScala = "2.12.21"
@@ -24,7 +25,7 @@ object V {
 
   val betterMonadicFor = "0.3.1"
 
-  val bloop = "2.0.16"
+  val bloop = "2.0.17"
 
   val bloopConfig = "2.3.3"
 
@@ -72,7 +73,7 @@ object V {
 
   val scalafix = "0.14.4"
 
-  val scalafmt = "3.7.15"
+  val scalafmt = "3.10.0"
 
   val scalameta = "4.14.4"
 

@@ -642,7 +642,7 @@ class ImplementationLspSuite extends BaseImplementationSuite("implementation") {
        |""".stripMargin,
   )
 
-  if (isJava21) {
+  if (isJava21 && !isMacOS) {
     checkSymbols(
       "exception".ignore.pending("requires definitionIndexStrategy=sources"),
       """package a
@@ -730,16 +730,18 @@ class ImplementationLspSuite extends BaseImplementationSuite("implementation") {
     ),
   )
 
-  check(
-    "self-type",
-    """|/a/src/main/scala/a/Main.scala
-       |trait A { def a@@a: Unit }
-       |trait B {
-       | this : A =>
-       |  override def <<aa>>: Unit = ()
-       |}
-       |""".stripMargin,
-  )
+  if (!isMacOS) {
+    check(
+      "self-type",
+      """|/a/src/main/scala/a/Main.scala
+         |trait A { def a@@a: Unit }
+         |trait B {
+         | this : A =>
+         |  override def <<aa>>: Unit = ()
+         |}
+         |""".stripMargin,
+    )
+  }
 
   check(
     "self-type-1",

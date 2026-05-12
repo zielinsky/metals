@@ -2148,7 +2148,7 @@ final case class TestingServer(
 
   def buildTarget(displayName: String): String = {
     server.buildTargets
-      .findByDisplayName(displayName)
+      .findByDisplayNameOrUri(displayName)
       .map(_.getId().getUri())
       .getOrElse {
         val alternatives =

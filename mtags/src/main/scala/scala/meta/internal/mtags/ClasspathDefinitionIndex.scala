@@ -6,6 +6,7 @@ import java.util.jar.JarFile
 import scala.collection.concurrent.TrieMap
 import scala.util.control.NonFatal
 
+import scala.meta.Dialect
 import scala.meta.dialects.Scala213
 import scala.meta.internal.io.FileIO
 import scala.meta.internal.jdk.CollectionConverters._
@@ -32,7 +33,7 @@ import org.slf4j.LoggerFactory
  *   accompanying classfile, and then does a brute force search against all files
  *   have have a matching names in the accompanying *-sources.jar.
  */
-class ClasspathDefinitionIndex(mtags: () => Mtags) {
+class ClasspathDefinitionIndex(mtags: () => Mtags, dialect: Dialect) {
   private val declaredPackagesByJar =
     TrieMap.empty[DependencyModule, collection.Set[String]]
   private val logger = LoggerFactory.getLogger(getClass)
@@ -55,7 +56,7 @@ class ClasspathDefinitionIndex(mtags: () => Mtags) {
       // and we can intelligently guess that the file is most likely named
       // "PACKAGE/FILENAME".
       source <- moduleSources(module, filename)
-      doc = mtags().allSymbols(source, Scala213)
+      doc = mtags().allSymbols(source, dialect)
       occ <- findBestDefinition(symbol, doc)
       info = doc.symbols.find(_.symbol == occ.symbol)
       kind = info.map(_.kind)

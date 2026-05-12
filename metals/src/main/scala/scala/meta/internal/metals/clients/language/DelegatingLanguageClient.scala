@@ -33,6 +33,13 @@ class DelegatingLanguageClient(var underlying: MetalsLanguageClient)
     underlying.metalsSyncModes(params)
   }
 
+  override def showMessageRequest(
+      params: ShowMessageRequestParams,
+      defaultTo: () => MessageActionItem,
+  ): CompletableFuture[MessageActionItem] = {
+    underlying.showMessageRequest(params, defaultTo)
+  }
+
   override def registerCapability(
       params: RegistrationParams
   ): CompletableFuture[Void] = {

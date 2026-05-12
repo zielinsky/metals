@@ -7,12 +7,12 @@ import Tests._
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
 // For testing nightlies
-Global / resolvers += "scala-integration" at
-  "https://scala-ci.typesafe.com/artifactory/scala-integration/"
+Global / resolvers += "scala-nightlies" at
+  "https://repo.scala-lang.org/artifactory/maven-nightlies"
 
 // The OSS version of Metals that this Databricks-internal fork is based on.
 // Make sure to bump up this version when we merge with upstream.
-val forkBaseVersion = "1.6.3"
+val forkBaseVersion = "1.6.4"
 
 val currentVersion = "2.0.0"
 
@@ -275,6 +275,12 @@ val sharedSettings = sharedScalacOptions ++ List(
       )
     ),
   ),
+  libraryDependencies ++= {
+    if (isCI) Nil
+    // NOTE(olafur) pprint is indispensable for me while developing, I can't
+    // use println anymore for debugging because pprint.log is 100 times better.
+    else List("com.lihaoyi" %% "pprint" % V.pprint)
+  },
   scalacOptions ++= lintingOptions(scalaVersion.value),
 )
 
@@ -705,6 +711,7 @@ lazy val metals = project
       "semanticdbVersion" -> V.semanticdb(scalaVersion.value),
       "javaSemanticdbVersion" -> V.javaSemanticdb,
       "scalafmtVersion" -> V.scalafmt,
+      "scalafixVersion" -> V.scalafix,
       "scalaCliVersion" -> V.scalaCli,
       "millVersion" -> V.mill,
       "debugAdapterVersion" -> V.debugAdapter,
@@ -909,7 +916,6 @@ lazy val mtest = project
         "org.scalameta" %% "munit" % {
           if (scalaVersion.value.startsWith("2.11")) "1.0.0-M10"
           else if (scalaVersion.value == "2.13.15") "1.0.4"
-          else if (scalaVersion.value == "2.13.14") "1.0.2"
           else if (scalaVersion.value == "2.13.13") "1.0.0"
           else if (scalaVersion.value == "2.13.12") "1.0.0-M11"
           else V.munit

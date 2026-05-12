@@ -1023,19 +1023,18 @@ class Compilers(
       additionalAdjust: AdjustRange,
       isCancelled: () => Boolean,
   ): Future[List[ReferencesResult]] = {
-    // we filter only Scala files, since `references` for Java are not implemented
-    val filteredFiles = searchFiles.filter(_.isScala)
+    val filteredFiles = searchFiles.filter(_.isScalaOrJava)
     val results =
       if (symbols.isEmpty || filteredFiles.isEmpty) Nil
       else
-        withUncachedCompiler(id) { compiler =>
+        withUncachedCompilers(id) { case (scalaCompiler, javaCompiler) =>
           for {
             searchFile <- filteredFiles
             if !isCancelled()
           } yield {
             val uri = searchFile.toURI
             val (input, _, adjust) =
-              sourceAdjustments(uri.toString(), compiler.scalaVersion())
+              sourceAdjustments(uri.toString(), scalaCompiler.scalaVersion())
             val requestParams = new internal.pc.PcReferencesRequest(
               CompilerVirtualFileParams(
                 uri,
@@ -1045,7 +1044,9 @@ class Compilers(
               JEither.forRight(symbols.head),
               symbols.tail.asJava,
             )
-            compiler
+            val compilerToUse =
+              if (searchFile.isScala) scalaCompiler else javaCompiler
+            compilerToUse
               .references(requestParams)
               .asScala
               .map(
@@ -1665,18 +1666,26 @@ class Compilers(
     }
   }
 
-  private def withUncachedCompiler[T](
+  private def withUncachedCompilers[T](
       targetId: BuildTargetIdentifier
-  )(f: PresentationCompiler => T): Option[T] =
+  )(f: (PresentationCompiler, PresentationCompiler) => T): Option[T] =
     withKeyAndDefault(targetId) { case (key, getCompiler) =>
+      val javaCompiler = loadJavaCompiler(targetId)
       val (out, shouldShutdown) = Option(jcache.get(key))
         .map((_, false))
         .getOrElse((getCompiler(), true))
       if (shouldShutdown)
         scribe.debug(s"starting uncached presentation compiler for $targetId")
       val compiler = Option(out.await)
-      val result = compiler.map(f)
-      if (shouldShutdown) compiler.foreach(_.shutdown())
+      val result = compiler.flatMap { pc =>
+        javaCompiler.map { jc =>
+          f(pc, jc)
+        }
+      }
+      if (shouldShutdown) {
+        compiler.foreach(_.shutdown())
+        javaCompiler.foreach(_.shutdown())
+      }
       result
     }
 
