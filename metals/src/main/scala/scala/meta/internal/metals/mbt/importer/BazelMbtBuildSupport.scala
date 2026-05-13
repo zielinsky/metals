@@ -85,6 +85,11 @@ object BazelMbtBuildSupport {
         } {
           byBuildFile.getOrElseUpdate(p, mutable.Set.empty) += f
         }
+        // Ensure targets with no srcs (e.g. export-only targets) still produce
+        // a namespace so their dependsOn (exports) are preserved.
+        for (t <- targetLabels) {
+          byBuildFile.getOrElseUpdate(keys(t), mutable.Set.empty)
+        }
         for {
           t <- targetLabels
           p = keys(t)
