@@ -10,11 +10,28 @@ object MavenDigest extends Digestable {
       workspace: AbsolutePath,
       digest: MessageDigest,
   ): Boolean = {
-    workspace.listRecursive.forall {
+    val digestedPoms = workspace.listRecursive.forall {
       case file if file.filename == "pom.xml" =>
         Digest.digestFile(file, digest)
       case _ =>
         true
     }
+
+    val mvnDir = workspace.resolve(".mvn")
+    val digestedMvn =
+      List("toolchains.xml", "maven.config", "jvm.config", "extensions.xml")
+        .forall { name =>
+          Digest.digestFile(mvnDir.resolve(name), digest)
+        }
+
+    val m2 = AbsolutePath(
+      java.nio.file.Paths.get(System.getProperty("user.home"), ".m2")
+    )
+    val digestedGlobalM2 =
+      List("settings.xml", "toolchains.xml").forall { name =>
+        Digest.digestFile(m2.resolve(name), digest)
+      }
+
+    digestedPoms && digestedMvn && digestedGlobalM2
   }
 }

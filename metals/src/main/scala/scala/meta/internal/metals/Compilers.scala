@@ -144,6 +144,14 @@ class Compilers(
     mbtBuild,
     mtags,
   )
+  compilerConfiguration.onPcLoaded = targetId =>
+    buffers.open
+      .filter(path => buildTargets.inverseSources(path).contains(targetId))
+      .foreach(path =>
+        didFocus(path).foreach(diags =>
+          diagnostics.publishDiagnosticsNotAdjusted(path, diags)
+        )
+      )
   def fallbackClasspaths = compilerConfiguration.fallbackClasspaths
 
   import compilerConfiguration._

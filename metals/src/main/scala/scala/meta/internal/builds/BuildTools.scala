@@ -217,7 +217,7 @@ final class BuildTools(
     List(
       SbtBuildTool(workspaceVersion = None, workspace, userConfig),
       GradleBuildTool(userConfig, workspace),
-      MavenBuildTool(userConfig, workspace),
+      MavenBuildTool(userConfig, workspace, shellRunner, ec),
       MillBuildTool(userConfig, workspace),
       ScalaCliBuildTool(workspace, workspace, userConfig),
       BazelBuildTool(userConfig, workspace, shellRunner, ec),
@@ -247,7 +247,7 @@ final class BuildTools(
 
     sbtProject.foreach(buf += SbtBuildTool(_, userConfig))
     gradleProject.foreach(buf += GradleBuildTool(userConfig, _))
-    mavenProject.foreach(buf += MavenBuildTool(userConfig, _))
+    mavenProject.foreach(buf += MavenBuildTool(userConfig, _, shellRunner, ec))
     millProject.foreach(buf += MillBuildTool(userConfig, _))
     scalaCliProject.foreach(buf += ScalaCliBuildTool(workspace, _, userConfig))
     bazelProject.foreach { root =>
