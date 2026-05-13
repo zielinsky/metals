@@ -833,7 +833,7 @@ object BuildServerConnection {
             BspExtraBuildParams(
               BuildInfo.javaSemanticdbVersion,
               BuildInfo.scalametaVersion,
-              BuildInfo.supportedScala2Versions.asJava,
+              BuildInfo.supportedScalaVersions.asJava,
               config.enableBestEffort || userConfiguration.enableBestEffort,
             )
           ),

@@ -130,14 +130,14 @@ object DownloadDependencies {
 
   def downloadScala(): Seq[Path] = {
     scribe.info("Downloading scala library and sources")
-    BuildInfo.supportedScala2Versions.flatMap { scalaVersion =>
+    BuildInfo.supportedScalaVersions.flatMap { scalaVersion =>
       Embedded.downloadScalaSources(scalaVersion)
     }
   }
 
   def downloadMdoc(filterVersions: String => Boolean): Seq[Path] = {
     scribe.info("Downloading mdoc")
-    BuildInfo.supportedScala2Versions.filter(filterVersions).flatMap {
+    BuildInfo.supportedScalaVersions.filter(filterVersions).flatMap {
       scalaVersion =>
         Embedded.downloadMdoc(
           ScalaVersions.scalaBinaryVersionFromFullVersion(scalaVersion),
@@ -210,7 +210,7 @@ object DownloadDependencies {
 
   def downloadSemanticDBScalac(filterVersions: String => Boolean): Seq[Path] = {
     scribe.info("Downloading semanticdb-scalac")
-    BuildInfo.supportedScala2Versions.filter(filterVersions).flatMap {
+    BuildInfo.supportedScalaVersions.filter(filterVersions).flatMap {
       scalaVersion =>
         Embedded.downloadSemanticdbScalac(scalaVersion)
     }
@@ -234,7 +234,7 @@ object DownloadDependencies {
   ): Seq[Path] = {
     scribe.info("Downloading all Scalafix versions")
     val allScalaVersions =
-      (allSupportedScala3Versions ++ BuildInfo.supportedScala2Versions).filter(
+      (allSupportedScala3Versions ++ BuildInfo.supportedScalaVersions).filter(
         filterVersions
       )
     val allToDownload = allScalaVersions.distinct
@@ -269,7 +269,7 @@ object DownloadDependencies {
         Some(scalaVersion),
       )
 
-    (allSupportedScala3Versions ++ BuildInfo.supportedScala2Versions)
+    (allSupportedScala3Versions ++ BuildInfo.supportedScalaVersions)
       .filter(filterVersions)
       .flatMap { scalaVersion =>
         val noExpressionCompiler = Seq("3.6.0", "2.11.12")

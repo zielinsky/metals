@@ -275,12 +275,6 @@ val sharedSettings = sharedScalacOptions ++ List(
       )
     ),
   ),
-  libraryDependencies ++= {
-    if (isCI) Nil
-    // NOTE(olafur) pprint is indispensable for me while developing, I can't
-    // use println anymore for debugging because pprint.log is 100 times better.
-    else List("com.lihaoyi" %% "pprint" % V.pprint)
-  },
   scalacOptions ++= lintingOptions(scalaVersion.value),
 )
 
@@ -381,6 +375,12 @@ lazy val mtagsShared = project
       "org.lz4" % "lz4-java" % "1.8.0",
       "org.slf4j" % "slf4j-api" % "1.7.36",
     ),
+    libraryDependencies ++= {
+      if (isCI) Nil
+      // NOTE(olafur) pprint is indispensable for me while developing, I can't
+      // use println anymore for debugging because pprint.log is 100 times better.
+      else List("com.lihaoyi" %% "pprint" % V.pprint)
+    },
     (Compile / PB.targets) :=
       Seq(PB.gens.java(V.protobuf) -> (Compile / sourceManaged).value),
   )
@@ -717,7 +717,6 @@ lazy val metals = project
       "debugAdapterVersion" -> V.debugAdapter,
       "sbtJdiToolsVersion" -> V.sbtJdiTools,
       "supportedScalaVersions" -> V.supportedScalaVersions,
-      "supportedScala2Versions" -> V.scala2Versions,
       "minimumSupportedSbtVersion" -> V.minimumSupportedSbtVersion,
       "supportedScalaBinaryVersions" -> V.supportedScalaBinaryVersions,
       "deprecatedScalaVersions" -> V.deprecatedScalaVersions,
@@ -739,7 +738,6 @@ lazy val `sbt-metals` = project
     buildInfoPackage := "scala.meta.internal.sbtmetals",
     buildInfoKeys := Seq[BuildInfoKey](
       "semanticdbVersion" -> V.semanticdb(scalaVersion.value),
-      "supportedScala2Versions" -> V.scala2Versions,
       "javaSemanticdbVersion" -> V.javaSemanticdb,
       "lastSupportedSemanticdb" -> SemanticDbSupport.last,
     ),
@@ -932,8 +930,6 @@ lazy val mtest = project
       "scala212" -> V.scala212,
       "scala213" -> V.scala213,
       "scala3" -> V.scala3,
-      "scala2Versions" -> V.scala2Versions,
-      "scala2Versions" -> V.scala2Versions,
       "scalaVersion" -> scalaVersion.value,
       "kindProjector" -> V.kindProjector,
       "betterMonadicFor" -> V.betterMonadicFor,

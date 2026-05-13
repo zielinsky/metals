@@ -178,11 +178,11 @@ object V {
 
   // Scala 2
   // whenever version is removed please add it to MtagsResolver under last supported Metals version
-  def deprecatedScala2Versions: Seq[String] = Seq(
+  def deprecatedScalaVersions: Seq[String] = Seq(
 //    scala211
   )
 
-  def nonDeprecatedScala2Versions = Seq(
+  def nonDeprecatedScalaVersions = Seq(
     scala213,
     scala212,
     // "2.12.19",
@@ -195,27 +195,15 @@ object V {
   def minimumSupportedSbtVersion = {
     // Update when deprecating a Scala version together with sbt version
     val sbtScalaVersion = "2.12.21"
-    if (!nonDeprecatedScala2Versions.contains(sbtScalaVersion))
+    if (!nonDeprecatedScalaVersions.contains(sbtScalaVersion))
       throw new RuntimeException(
         "Please change minimalSupportedSbtVersion when removing support for a particular Scala version"
       )
     "1.11.0"
   }
 
-  def scala2Versions = nonDeprecatedScala2Versions ++ deprecatedScala2Versions
-
-  // Scala 3
-  def nonDeprecatedScala3Versions: Seq[String] =
-    Seq()
-
-  // NOTE if you had a new Scala Version make sure it's contained in quickPublishScalaVersions
-  def scala3Versions = nonDeprecatedScala3Versions
-
   def supportedScalaVersions =
-    scala2Versions ++ scala3Versions
-  def nonDeprecatedScalaVersions =
-    nonDeprecatedScala2Versions ++ nonDeprecatedScala3Versions
-  def deprecatedScalaVersions = deprecatedScala2Versions
+    nonDeprecatedScalaVersions ++ deprecatedScalaVersions
 
   val quickPublishScalaVersions = Set(
 //     bazelScalaVersion,
