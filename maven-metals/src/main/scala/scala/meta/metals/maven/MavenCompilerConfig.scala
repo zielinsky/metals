@@ -1,0 +1,147 @@
+package scala.meta.metals.maven
+
+import java.{util => ju}
+
+import scala.jdk.CollectionConverters._
+
+import org.apache.maven.model.Plugin
+import org.apache.maven.project.MavenProject
+import org.codehaus.plexus.util.xml.Xpp3Dom
+
+private[maven] case class CompilerConfig(
+    javacOptions: List[String],
+    scalacOptions: List[String],
+    scalaVersion: String,
+)
+
+private[maven] object MavenCompilerConfig {
+
+  import MavenPluginSupport._
+
+  def extract(project: MavenProject, isTest: Boolean): CompilerConfig = {
+    val plugins = effectivePlugins(project)
+    val props = project.getProperties
+
+    def prop(key: String): Option[String] =
+      Option(props.getProperty(key)).filter(_.nonEmpty)
+
+    val javacOpts = extractJavacOptions(plugins, prop, isTest)
+    val (scalacOpts, scalaVer) = extractScalaOptions(plugins)
+
+    CompilerConfig(javacOpts, scalacOpts, scalaVer)
+  }
+
+  private def extractJavacOptions(
+      plugins: ju.Map[String, Plugin],
+      prop: String => Option[String],
+      isTest: Boolean,
+  ): List[String] = {
+    val args = List.newBuilder[String]
+
+    val cfgOpt =
+      Option(plugins.get(JavaCompilerPlugin)).flatMap(
+        compilerPluginConfiguration(_, isTest)
+      )
+
+    val release =
+      (if (isTest) prop("maven.compiler.testRelease") else None)
+        .orElse(cfgOpt.flatMap(childText(_, "release")))
+        .orElse(prop("maven.compiler.release"))
+    val source =
+      (if (isTest) prop("maven.compiler.testSource") else None)
+        .orElse(cfgOpt.flatMap(childText(_, "source")))
+        .orElse(prop("maven.compiler.source"))
+    val target =
+      (if (isTest) prop("maven.compiler.testTarget") else None)
+        .orElse(cfgOpt.flatMap(childText(_, "target")))
+        .orElse(prop("maven.compiler.target"))
+
+    release match {
+      case Some(v) => args += "--release" += v
+      case None =>
+        source.foreach(v => args += "-source" += v)
+        target.foreach(v => args += "-target" += v)
+    }
+
+    val encoding =
+      cfgOpt
+        .flatMap(childText(_, "encoding"))
+        .orElse(prop("project.build.sourceEncoding"))
+        .orElse(prop("maven.compiler.encoding"))
+    encoding.foreach(v => args += "-encoding" += v)
+
+    val enablePreview =
+      cfgOpt
+        .flatMap(childText(_, "enablePreview"))
+        .orElse(prop("air.compiler.enable-preview"))
+    if (enablePreview.contains("true")) args += "--enable-preview"
+
+    val parameters = cfgOpt.flatMap(childText(_, "parameters"))
+    if (parameters.exists(_.equalsIgnoreCase("true"))) args += "-parameters"
+
+    val showWarnings = cfgOpt.flatMap(childText(_, "showWarnings"))
+    if (showWarnings.exists(_.equalsIgnoreCase("true"))) args += "-Xlint"
+
+    val showDeprecation = cfgOpt.flatMap(childText(_, "showDeprecation"))
+    if (showDeprecation.exists(_.equalsIgnoreCase("true")))
+      args += "-Xlint:deprecation"
+
+    cfgOpt.flatMap(childText(_, "proc")).foreach(v => args += s"-proc:$v")
+
+    cfgOpt
+      .flatMap(cfg => Option(cfg.getChild("annotationProcessors")))
+      .foreach { processors =>
+        val processorNames = processors.getChildren
+          .flatMap(p => Option(p.getValue).filter(_.nonEmpty))
+          .toList
+        if (processorNames.nonEmpty) {
+          args += "-processor"
+          args += processorNames.mkString(",")
+        }
+      }
+
+    cfgOpt.foreach { cfg =>
+      def add(value: String): Unit =
+        Option(value).filter(_.nonEmpty).foreach(args += _)
+
+      Option(cfg.getChild("compilerArgs")).foreach(
+        _.getChildren.foreach(arg => add(arg.getValue))
+      )
+      childText(cfg, "compilerArg").foreach(add)
+      childText(cfg, "compilerArgument").foreach(add)
+      Option(cfg.getChild("compilerArguments")).foreach { compilerArgs =>
+        compilerArgs.getChildren.foreach { child =>
+          val flag = s"-${child.getName}"
+          val value = Option(child.getValue).filter(_.nonEmpty)
+          args += value.fold(flag)(v => s"$flag:$v")
+        }
+      }
+    }
+
+    args.result()
+  }
+
+  private def extractScalaOptions(
+      plugins: ju.Map[String, Plugin]
+  ): (List[String], String) = {
+    val cfgOpt = for {
+      plugin <- Option(plugins.get(ScalaMavenPlugin))
+      cfg <- mergedPluginConfiguration(plugin)
+    } yield cfg
+
+    cfgOpt match {
+      case None => (Nil, null)
+      case Some(cfg) =>
+        val scalacArgs = Option(cfg.getChild("args"))
+          .map(_.getChildren.map(_.getValue).toList)
+          .getOrElse(Nil)
+        val addScalacArgs = childText(cfg, "addScalacArgs")
+          .map(_.split("\\|").map(_.trim).filter(_.nonEmpty).toList)
+          .getOrElse(Nil)
+        val scalaVersion = childText(cfg, "scalaVersion")
+          .orElse(childText(cfg, "scalaCompatVersion"))
+          .orNull
+        (scalacArgs ++ addScalacArgs, scalaVersion)
+    }
+  }
+}
