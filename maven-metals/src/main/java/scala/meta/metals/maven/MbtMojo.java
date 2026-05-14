@@ -28,7 +28,8 @@ import java.util.List;
 @Mojo(
     name = "export",
     defaultPhase = LifecyclePhase.GENERATE_SOURCES,
-    requiresDependencyResolution = ResolutionScope.TEST,
+    requiresDependencyCollection = ResolutionScope.TEST,
+    requiresDependencyResolution = ResolutionScope.NONE,
     aggregator = true,
     threadSafe = true
 )

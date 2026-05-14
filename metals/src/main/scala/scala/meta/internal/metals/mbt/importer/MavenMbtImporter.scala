@@ -33,6 +33,7 @@ abstract class MavenMbtImporter(
     val args = mavenBaseCommand() :::
       List(
         "--fail-never",
+        "--quiet",
         pluginCoordinates,
         s"-DmbtOutputFile=${out}",
       )
