@@ -71,10 +71,10 @@ case class MbtTarget(
     capabilities.setCanRun(false)
     capabilities.setCanTest(false)
 
-    val scalaVersion = this.scalaVersion.getOrElse(
+    lazy val scalaVersion = this.scalaVersion.getOrElse(
       scalaVersionSelector.fallbackScalaVersion()
     )
-    val scalaTarget = new bsp4j.ScalaBuildTarget(
+    lazy val scalaTarget = new bsp4j.ScalaBuildTarget(
       "org.scala-lang",
       scalaVersion,
       scalaBinaryVersion(scalaVersion),
@@ -86,19 +86,26 @@ case class MbtTarget(
     jvmBt.setJavaHome(
       javaPath.toUri().toString()
     )
-    scalaTarget.setJvmBuildTarget(jvmBt)
+
+    val (languageIds, dataKind, data) =
+      if (this.scalaVersion.isDefined) {
+        scalaTarget.setJvmBuildTarget(jvmBt)
+        (List("scala", "java").asJava, "scala", MbtTarget.toGson(scalaTarget))
+      } else {
+        (List("java").asJava, "jvm", MbtTarget.toGson(jvmBt))
+      }
 
     val target = new bsp4j.BuildTarget(
       id,
       ju.Collections.emptyList(),
-      List("scala", "java").asJava,
+      languageIds,
       dependsOn.asJava,
       capabilities,
     )
     target.setDisplayName(name)
     target.setBaseDirectory(baseDirectory(workspace).toURI.toString)
-    target.setDataKind("scala")
-    target.setData(MbtTarget.toGson(scalaTarget))
+    target.setDataKind(dataKind)
+    target.setData(data)
     target
   }
 
@@ -150,6 +157,6 @@ case class MbtTarget(
 
 object MbtTarget {
   private val gson = new com.google.gson.Gson()
-  private def toGson(value: bsp4j.ScalaBuildTarget) =
+  private[mbt] def toGson[T](value: T) =
     gson.toJsonTree(value)
 }

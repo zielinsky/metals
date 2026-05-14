@@ -112,6 +112,11 @@ jobs:
             name: Scala javapc tests
             os: ubuntu-latest
             java: "17"
+          - type: maven-metals
+            command: mvn -q -Dflatten.skip=true -f maven-metals/pom.xml test
+            name: Maven Metals tests
+            os: ubuntu-latest
+            java: "17"
           - type: scalafix
             command: sbt scalafixCheck docs/docusaurusCreateSite
             name: Scalafix and docs

@@ -111,6 +111,54 @@ addCommandAlias(
   "+publishLocal; metals/runMain scala.meta.metals.DownloadDependencies ",
 )
 
+def runMavenMetals(
+    base: File,
+    version: String,
+    scalaVersion: String,
+    goals: Seq[String],
+    log: Logger,
+): Unit = {
+  val command =
+    Seq(
+      "mvn",
+      "-q",
+      "-Dflatten.skip=true",
+      "-f",
+      (base / "maven-metals" / "pom.xml").getAbsolutePath,
+      s"-Drevision=$version",
+      s"-Dversion.scala=$scalaVersion",
+    ) ++ goals
+  log.info(command.mkString(" "))
+  val exitCode = Process(command, base).!
+  if (exitCode != 0)
+    sys.error(s"maven-metals failed with exit code $exitCode")
+}
+
+lazy val `maven-metals` = project
+  .in(file("maven-metals"))
+  .settings(
+    Compile / scalafix / skip := true,
+    Test / scalafix / skip := true,
+    publishLocal := Def.task {
+      runMavenMetals(
+        (ThisBuild / baseDirectory).value,
+        version.value,
+        V.scala213,
+        Seq("install"),
+        streams.value.log,
+      )
+    }.value,
+    Test / test := Def.task {
+      runMavenMetals(
+        (ThisBuild / baseDirectory).value,
+        version.value,
+        V.scala213,
+        Seq("test"),
+        streams.value.log,
+      )
+    }.value,
+  )
+
 def configureMtagsScalaVersionDynamically(
     state: State,
     scalaV: String,
@@ -166,6 +214,7 @@ commands ++= Seq(
     "interfaces/publishLocal" ::
       "jsemanticdb/publishLocal" ::
       "turbine/publishLocal" ::
+      "maven-metals/publishLocal" ::
       "semanticdb-javac/publishLocal" ::
       "semanticdb-protoc/publishLocal" ::
       s"++${V.scala213} metals/publishLocal" ::
@@ -706,6 +755,7 @@ lazy val metals = project
       "gitter8Version" -> V.gitter8Version,
       "gradleBloopVersion" -> V.gradleBloop,
       "mavenBloopVersion" -> V.mavenBloop,
+      "metalsMavenPluginVersion" -> version.value,
       "sbt2Version" -> V.sbt2Version,
       "scalametaVersion" -> V.scalameta,
       "semanticdbVersion" -> V.semanticdb(scalaVersion.value),
@@ -1069,10 +1119,18 @@ lazy val slow = project
     testSettings,
     sharedSettings,
     Test / testOnly := (Test / testOnly)
-      .dependsOn((`sbt-metals` / publishLocal), publishBinaryMtags)
+      .dependsOn(
+        (`sbt-metals` / publishLocal),
+        publishBinaryMtags,
+        `maven-metals` / publishLocal,
+      )
       .evaluated,
     Test / test := (Test / test)
-      .dependsOn(`sbt-metals` / publishLocal, publishBinaryMtags)
+      .dependsOn(
+        `sbt-metals` / publishLocal,
+        publishBinaryMtags,
+        `maven-metals` / publishLocal,
+      )
       .value,
   )
   .dependsOn(unit)

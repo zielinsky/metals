@@ -61,6 +61,8 @@ class CompilerConfiguration(
     mtags: () => Mtags,
 )(implicit ec: ExecutionContextExecutorService, rc: ReportContext) {
 
+  var onPcLoaded: BuildTargetIdentifier => Unit = _ => ()
+
   private val plugins = new CompilerPlugins()
   val fallbackClasspaths = new FallbackClasspaths(
     workspace,
@@ -252,6 +254,7 @@ class CompilerConfiguration(
               s"[${buildTargetId.getUri}] Real PC loaded, replacing fallback PC."
             )
             oldCompiler.shutdown()
+            onPcLoaded(buildTargetId)
           }
         result
       }
