@@ -7,6 +7,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex
 
 import org.apache.maven.model.Plugin
+import org.apache.maven.model.PluginExecution
 import org.apache.maven.project.MavenProject
 import org.codehaus.plexus.util.xml.Xpp3Dom
 
@@ -41,6 +42,17 @@ private[maven] object MavenPluginSupport {
     val execCfgs = plugin.getExecutions.asScala
       .flatMap(e => Option(e.getConfiguration).map(_.asInstanceOf[Xpp3Dom]))
     mergeConfigurations(execCfgs.toSeq ++ pluginCfg)
+  }
+
+  def mergedPluginConfiguration(
+      plugin: Plugin,
+      e: PluginExecution,
+  ): Option[Xpp3Dom] = {
+    val pluginCfg =
+      Option(plugin.getConfiguration).map(_.asInstanceOf[Xpp3Dom])
+    val execCfg =
+      Option(e.getConfiguration).map(_.asInstanceOf[Xpp3Dom])
+    mergeConfigurations(execCfg.toSeq ++ pluginCfg)
   }
 
   def compilerPluginConfiguration(

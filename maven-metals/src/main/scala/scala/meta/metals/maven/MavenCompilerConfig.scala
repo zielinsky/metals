@@ -10,7 +10,7 @@ import org.apache.maven.project.MavenProject
 private[maven] case class CompilerConfig(
     javacOptions: List[String],
     scalacOptions: List[String],
-    scalaVersion: String,
+    scalaVersion: Option[String],
 )
 
 private[maven] object MavenCompilerConfig {
@@ -118,7 +118,7 @@ private[maven] object MavenCompilerConfig {
   private def extractScalaOptions(
       plugins: ju.Map[String, Plugin],
       isTest: Boolean,
-  ): (List[String], String) = {
+  ): (List[String], Option[String]) = {
     val result = for {
       plugin <- Option(plugins.get(ScalaMavenPlugin))
       cfg <- compilerPluginConfiguration(plugin, isTest)
@@ -131,9 +131,8 @@ private[maven] object MavenCompilerConfig {
         .getOrElse(Nil)
       val scalaVersion = childText(cfg, "scalaVersion")
         .orElse(childText(cfg, "scalaCompatVersion"))
-        .orNull
       (scalacArgs ++ addScalacArgs, scalaVersion)
     }
-    result.getOrElse((Nil, null))
+    result.getOrElse((Nil, None))
   }
 }

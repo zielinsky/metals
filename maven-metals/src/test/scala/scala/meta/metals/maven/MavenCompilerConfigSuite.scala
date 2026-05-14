@@ -55,7 +55,7 @@ class MavenCompilerConfigSuite extends AnyFunSuite {
         "-Xlint",
       )
     )
-    assert(config.scalaVersion == "2.13.14")
+    assert(config.scalaVersion == Some("2.13.14"))
   }
 
   test("extracts test-specific javac options using testRelease property") {
@@ -164,8 +164,8 @@ class MavenCompilerConfigSuite extends AnyFunSuite {
     assert(!mainConfig.scalacOptions.contains("-Xtest"))
     assert(testConfig.scalacOptions.contains("-Xtest"))
     assert(!testConfig.scalacOptions.contains("-Xmain"))
-    assert(mainConfig.scalaVersion == "2.13.14")
-    assert(testConfig.scalaVersion == "2.13.14")
+    assert(mainConfig.scalaVersion == Some("2.13.14"))
+    assert(testConfig.scalaVersion == Some("2.13.14"))
   }
 
   test("emits -parameters from maven.compiler.parameters property") {

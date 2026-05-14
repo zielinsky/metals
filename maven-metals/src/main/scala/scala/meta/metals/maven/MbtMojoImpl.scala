@@ -177,7 +177,7 @@ object MbtMojoImpl {
           log,
         )
         .asJava,
-      scalaVersion = compilerConfig.scalaVersion,
+      scalaVersion = compilerConfig.scalaVersion.orNull,
       javaHome = javaHome,
       dependsOn = computeDependsOn(
         project,
@@ -265,7 +265,7 @@ object MbtMojoImpl {
       project: MavenProject,
   ): Option[String] =
     Option(d.getVersion).filter(_.nonEmpty).orElse {
-      val versionMap = project.getManagedVersionMap
+      val versionMap = Option(project.getManagedVersionMap)
       val classifier = Option(d.getClassifier).filter(_.nonEmpty)
       // Maven keys: groupId:artifactId:type[:classifier]
       val keys = List(
@@ -275,7 +275,7 @@ object MbtMojoImpl {
         Some(s"${d.getGroupId}:${d.getArtifactId}:jar"),
       ).flatten
       keys
-        .flatMap(k => Option(versionMap.get(k)))
+        .flatMap(k => versionMap.flatMap(m => Option(m.get(k))))
         .headOption
         .map(_.getBaseVersion)
     }

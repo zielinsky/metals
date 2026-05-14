@@ -27,12 +27,10 @@ private[maven] object JavaHomeResolver {
   private[maven] def selectJavaHome(
       project: MavenProject,
       candidates: List[String],
-  ): String = {
+  ): Option[String] = {
     val requirement = javaRequirement(project)
-    val javaHome =
-      if (requirement.isEmpty) candidates.headOption
-      else candidates.find(javaHomeSupports(_, requirement))
-    javaHome.orNull
+    if (requirement.isEmpty) candidates.headOption
+    else candidates.find(javaHomeSupports(_, requirement))
   }
 
   // Returns the JDK toolchain already selected by maven-toolchains-plugin in this session.
@@ -50,6 +48,7 @@ private[maven] object JavaHomeResolver {
   private[maven] def fromForkExecutable(
       project: MavenProject,
       isTest: Boolean,
+      pathDirs: => Seq[String] = systemPathDirs,
   ): Option[String] = {
     val plugins = effectivePlugins(project)
     for {
@@ -58,17 +57,33 @@ private[maven] object JavaHomeResolver {
       _ <- childText(cfg, "fork").filter(_.equalsIgnoreCase("true"))
       rawExecutable <- childText(cfg, "executable").filter(_.nonEmpty)
       interpolated = interpolatePath(rawExecutable, project)
-      // Skip bare command names like "javac" — only useful if it looks like a path
-      if interpolated.contains("/") || interpolated.contains(
-        java.io.File.separator
-      )
-      executable = absolutePath(interpolated, project)
-      path = Path.of(executable)
-      if path.isAbsolute
-      parent <- Option(path.getParent)
+      resolved <- resolveExecutablePath(interpolated, project, pathDirs)
+      parent <- Option(resolved.getParent)
       grandparent <- Option(parent.getParent)
     } yield grandparent.toString
   }
+
+  private def resolveExecutablePath(
+      interpolated: String,
+      project: MavenProject,
+      pathDirs: Seq[String],
+  ): Option[Path] =
+    if (
+      interpolated
+        .contains("/") || interpolated.contains(java.io.File.separator)
+    ) {
+      val path = Path.of(absolutePath(interpolated, project))
+      Option.when(path.isAbsolute)(path)
+    } else {
+      // Bare command name (e.g. "javac21") — search PATH directories
+      pathDirs
+        .map(dir => Path.of(dir).resolve(interpolated))
+        .find(Files.isExecutable)
+    }
+
+  private def systemPathDirs: Seq[String] =
+    Option(System.getenv("PATH")).toList
+      .flatMap(_.split(java.io.File.pathSeparator))
 
   private def fromCompilerJdkToolchain(
       project: MavenProject,
@@ -106,7 +121,7 @@ private[maven] object JavaHomeResolver {
         reqs.flatMap { r =>
           val homes = toolchainHomes(r, mojo)
           if (homes.isEmpty) None
-          else Option(selectJavaHome(project, homes))
+          else selectJavaHome(project, homes)
         }
       }
   }

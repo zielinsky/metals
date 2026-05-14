@@ -35,10 +35,10 @@ class JavaHomeResolverSuite extends AnyFunSuite {
       candidates = List(azul21, temurin25, oracle25).map(_.toString),
     )
 
-    assert(selected == temurin25.toString)
+    assert(selected == Some(temurin25.toString))
   }
 
-  test("returns null when no candidate JDK satisfies project requirements") {
+  test("returns None when no candidate JDK satisfies project requirements") {
     val workspace = Files.createTempDirectory("jdk-missing")
     val azul21 = fakeJdk(workspace, "azul-21", "21.0.8", "Azul Systems, Inc.")
 
@@ -50,7 +50,7 @@ class JavaHomeResolverSuite extends AnyFunSuite {
       candidates = List(azul21.toString),
     )
 
-    assert(selected == null)
+    assert(selected == None)
   }
 
   test("resolves javaHome from fork/executable in compiler plugin") {
@@ -102,7 +102,14 @@ class JavaHomeResolverSuite extends AnyFunSuite {
     assert(home == Some(jdk21.toString))
   }
 
-  test("resolveFromForkExecutable ignores non-absolute executable") {
+  test("resolveFromForkExecutable resolves bare command name from PATH") {
+    val workspace = Files.createTempDirectory("jdk-fork-bare")
+    val jdk21 = Files.createDirectories(workspace.resolve("jdk-21"))
+    val bin = Files.createDirectories(jdk21.resolve("bin"))
+    val javac21 = bin.resolve("javac21")
+    Files.createFile(javac21)
+    javac21.toFile.setExecutable(true)
+
     val project = new MavenProject()
     project.setBuild(new Build())
     project.getBuild.addPlugin(
@@ -110,7 +117,28 @@ class JavaHomeResolverSuite extends AnyFunSuite {
         node(
           "configuration",
           node("fork", "true"),
-          node("executable", "javac"),
+          node("executable", "javac21"),
+        )
+      )
+    )
+
+    val home = JavaHomeResolver.fromForkExecutable(
+      project,
+      isTest = false,
+      pathDirs = Seq(bin.toString),
+    )
+    assert(home == Some(jdk21.toString))
+  }
+
+  test("resolveFromForkExecutable returns None when bare command not on PATH") {
+    val project = new MavenProject()
+    project.setBuild(new Build())
+    project.getBuild.addPlugin(
+      compilerPlugin(
+        node(
+          "configuration",
+          node("fork", "true"),
+          node("executable", "javac-nonexistent"),
         )
       )
     )
@@ -119,6 +147,7 @@ class JavaHomeResolverSuite extends AnyFunSuite {
       JavaHomeResolver.fromForkExecutable(
         project,
         isTest = false,
+        pathDirs = Seq.empty,
       ) == None
     )
   }
@@ -207,7 +236,7 @@ class JavaHomeResolverSuite extends AnyFunSuite {
       candidates = List(temurin.toString),
     )
 
-    assert(selected == temurin.toString)
+    assert(selected == Some(temurin.toString))
   }
 
   test("javacOptionsRequirements extracts version from --release and -source") {

@@ -92,7 +92,7 @@ private[maven] object MavenSourceRoots {
         val goal = if (isTest) "add-test-source" else "add-source"
         plugin.getExecutions.asScala.toList
           .filter(_.getGoals.asScala.contains(goal))
-          .flatMap(e => Option(e.getConfiguration).map(_.asInstanceOf[Xpp3Dom]))
+          .flatMap(e => mergedPluginConfiguration(plugin, e))
           .flatMap(buildHelperSources(_, project))
       }
 
