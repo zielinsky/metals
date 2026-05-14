@@ -4,7 +4,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 
+import org.apache.maven.model.PluginExecution
 import org.apache.maven.project.MavenProject
 import org.codehaus.plexus.util.xml.Xpp3Dom
 
@@ -21,7 +23,7 @@ private[maven] object JavaHomeResolver {
     fromForkExecutable(project, isTest)
       .orElse(fromCompilerJdkToolchain(project, isTest, mojo))
       .orElse(fromMavenSessionToolchain(mojo))
-      .orElse(fromToolchainsXml(project, javacOptions, mojo))
+      .orElse(fromToolchainsXml(project, javacOptions, isTest, mojo))
       .orElse(sys.props.get("java.home").filter(_.nonEmpty))
 
   private[maven] def selectJavaHome(
@@ -40,10 +42,7 @@ private[maven] object JavaHomeResolver {
         Option(tm.getToolchainFromBuildContext("jdk", mojo.getSession))
       )
       .flatMap(tc => Option(tc.findTool("java")))
-      .flatMap(javaExe =>
-        Option(Path.of(javaExe).getParent).flatMap(p => Option(p.getParent))
-      )
-      .map(_.toString)
+      .flatMap(javaHomeFromExecutable)
 
   private[maven] def fromForkExecutable(
       project: MavenProject,
@@ -58,9 +57,8 @@ private[maven] object JavaHomeResolver {
       rawExecutable <- childText(cfg, "executable").filter(_.nonEmpty)
       interpolated = interpolatePath(rawExecutable, project)
       resolved <- resolveExecutablePath(interpolated, project, pathDirs)
-      parent <- Option(resolved.getParent)
-      grandparent <- Option(parent.getParent)
-    } yield grandparent.toString
+      home <- javaHomeFromExecutable(resolved)
+    } yield home
   }
 
   private def resolveExecutablePath(
@@ -72,14 +70,32 @@ private[maven] object JavaHomeResolver {
       interpolated
         .contains("/") || interpolated.contains(java.io.File.separator)
     ) {
-      val path = Path.of(absolutePath(interpolated, project))
+      val path = canonicalizePath(absolutePath(interpolated, project))
       Option.when(path.isAbsolute)(path)
     } else {
       // Bare command name (e.g. "javac21") — search PATH directories
       pathDirs
         .map(dir => Path.of(dir).resolve(interpolated))
         .find(Files.isExecutable)
+        .map(path => canonicalizePath(path.toString))
     }
+
+  private[maven] def canonicalizePath(pathString: String): Path = {
+    val path = Path.of(pathString)
+    try path.toRealPath()
+    catch {
+      case NonFatal(_) => path.toAbsolutePath.normalize()
+    }
+  }
+
+  private def javaHomeFromExecutable(executable: String): Option[String] =
+    javaHomeFromExecutable(canonicalizePath(executable))
+
+  private def javaHomeFromExecutable(executable: Path): Option[String] =
+    for {
+      parent <- Option(executable.getParent)
+      grandparent <- Option(parent.getParent)
+    } yield grandparent.toString
 
   private def systemPathDirs: Seq[String] =
     Option(System.getenv("PATH")).toList
@@ -110,9 +126,10 @@ private[maven] object JavaHomeResolver {
   private def fromToolchainsXml(
       project: MavenProject,
       javacOptions: List[String],
+      isTest: Boolean,
       mojo: MbtMojo,
   ): Option[String] = {
-    toolchainsPluginRequirements(project)
+    toolchainsPluginRequirements(project, isTest)
       .flatMap(r => toolchainHomes(r, mojo).headOption)
       .orElse {
         val reqs = propertyRequirements(project)
@@ -146,13 +163,21 @@ private[maven] object JavaHomeResolver {
   }
 
   private def toolchainsPluginRequirements(
-      project: MavenProject
+      project: MavenProject,
+      isTest: Boolean,
   ): Option[Map[String, String]] = {
     val plugins = effectivePlugins(project)
     Option(plugins.get(MavenToolchainsPlugin)).flatMap { plugin =>
-      val cfgs = plugin.getExecutions.asScala
-        .flatMap(e => Option(e.getConfiguration).map(_.asInstanceOf[Xpp3Dom]))
-        .toList
+      val executionCfgs = plugin.getExecutions.asScala
+        .flatMap(e => mergedPluginConfiguration(plugin, e).map(_ -> e))
+        .toSeq
+      val specificCfgs = executionCfgs
+        .filter { case (_, e) => toolchainExecutionMatches(e, isTest) }
+        .map(_._1)
+      val neutralCfgs = executionCfgs
+        .filter { case (_, e) => toolchainExecutionTarget(e).isEmpty }
+        .map(_._1)
+      val cfgs = specificCfgs ++ neutralCfgs
       val topCfg = Option(plugin.getConfiguration).map(_.asInstanceOf[Xpp3Dom])
       (cfgs ++ topCfg)
         .flatMap { cfg =>
@@ -170,6 +195,48 @@ private[maven] object JavaHomeResolver {
         .headOption
     }
   }
+
+  private def toolchainExecutionMatches(
+      execution: PluginExecution,
+      isTest: Boolean,
+  ): Boolean =
+    toolchainExecutionTarget(execution).contains(isTest)
+
+  private def toolchainExecutionTarget(
+      execution: PluginExecution
+  ): Option[Boolean] = {
+    val values =
+      Option(execution.getId).toSeq ++
+        Option(execution.getPhase).toSeq ++
+        execution.getGoals.asScala.toSeq
+    if (values.exists(isTestExecutionValue)) Some(true)
+    else if (values.exists(isMainExecutionValue)) Some(false)
+    else None
+  }
+
+  private def isTestExecutionValue(value: String): Boolean = {
+    val normalized = normalizeExecutionValue(value)
+    val tokens = executionTokens(value)
+    normalized.contains("testcompile") ||
+    normalized.startsWith("test") ||
+    tokens.contains("test")
+  }
+
+  private def isMainExecutionValue(value: String): Boolean = {
+    val normalized = normalizeExecutionValue(value)
+    val tokens = executionTokens(value)
+    normalized == "compile" ||
+    normalized.endsWith("compile") ||
+    tokens.contains("main")
+  }
+
+  private def normalizeExecutionValue(value: String): String =
+    Option(value).getOrElse("").toLowerCase.replaceAll("[^a-z0-9]", "")
+
+  private def executionTokens(value: String): Seq[String] =
+    Option(value).toSeq
+      .flatMap(_.toLowerCase.split("[^a-z0-9]+"))
+      .filter(_.nonEmpty)
 
   private def propertyRequirements(
       project: MavenProject
@@ -241,11 +308,7 @@ private[maven] object JavaHomeResolver {
         Option(tm.getToolchains(mojo.getSession, "jdk", reqs.asJava)).toList
           .flatMap(_.asScala)
           .flatMap { tc =>
-            Option(tc.findTool("java")).flatMap { javaExe =>
-              Option(Path.of(javaExe).getParent)
-                .flatMap(p => Option(p.getParent))
-                .map(_.toString)
-            }
+            Option(tc.findTool("java")).flatMap(javaHomeFromExecutable)
           }
       }
 

@@ -73,7 +73,7 @@ class JavaHomeResolverSuite extends AnyFunSuite {
 
     val home =
       JavaHomeResolver.fromForkExecutable(project, isTest = false)
-    assert(home == Some(jdk21.toString))
+    assert(home == Some(canonicalHome(jdk21)))
   }
 
   test(
@@ -99,7 +99,32 @@ class JavaHomeResolverSuite extends AnyFunSuite {
 
     val home =
       JavaHomeResolver.fromForkExecutable(project, isTest = false)
-    assert(home == Some(jdk21.toString))
+    assert(home == Some(canonicalHome(jdk21)))
+  }
+
+  test("resolveFromForkExecutable canonicalizes symlinked executable path") {
+    val workspace = Files.createTempDirectory("jdk-fork-symlink")
+    val jdk21 = Files.createDirectories(workspace.resolve("jdk-21"))
+    val bin = Files.createDirectories(jdk21.resolve("bin"))
+    val javac = Files.createFile(bin.resolve("javac"))
+    val shimBin = Files.createDirectories(workspace.resolve("shims"))
+    val javacShim = createSymbolicLink(shimBin.resolve("javac"), javac)
+
+    val project = new MavenProject()
+    project.setBuild(new Build())
+    project.getBuild.addPlugin(
+      compilerPlugin(
+        node(
+          "configuration",
+          node("fork", "true"),
+          node("executable", javacShim.toString),
+        )
+      )
+    )
+
+    val home =
+      JavaHomeResolver.fromForkExecutable(project, isTest = false)
+    assert(home == Some(canonicalHome(jdk21)))
   }
 
   test("resolveFromForkExecutable resolves bare command name from PATH") {
@@ -127,7 +152,7 @@ class JavaHomeResolverSuite extends AnyFunSuite {
       isTest = false,
       pathDirs = Seq(bin.toString),
     )
-    assert(home == Some(jdk21.toString))
+    assert(home == Some(canonicalHome(jdk21)))
   }
 
   test("resolveFromForkExecutable returns None when bare command not on PATH") {
@@ -216,11 +241,11 @@ class JavaHomeResolverSuite extends AnyFunSuite {
 
     assert(
       JavaHomeResolver.fromForkExecutable(project, isTest = false) ==
-        Some(mainJdk.toString)
+        Some(canonicalHome(mainJdk))
     )
     assert(
       JavaHomeResolver.fromForkExecutable(project, isTest = true) ==
-        Some(testJdk.toString)
+        Some(canonicalHome(testJdk))
     )
   }
 
@@ -292,6 +317,23 @@ class JavaHomeResolverSuite extends AnyFunSuite {
       mojoWithActiveToolchain(jdkHome),
     )
     assert(result == Some(jdkHome))
+  }
+
+  test("resolve canonicalizes active maven session toolchain java path") {
+    val workspace = Files.createTempDirectory("jdk-session-symlink")
+    val jdk21 = Files.createDirectories(workspace.resolve("jdk-21"))
+    val bin = Files.createDirectories(jdk21.resolve("bin"))
+    val java = Files.createFile(bin.resolve("java"))
+    val shimBin = Files.createDirectories(workspace.resolve("shims"))
+    val javaShim = createSymbolicLink(shimBin.resolve("java"), java)
+
+    val result = JavaHomeResolver.resolve(
+      Nil,
+      new MavenProject(),
+      false,
+      mojoWithActiveJavaTool(javaShim),
+    )
+    assert(result == Some(canonicalHome(jdk21)))
   }
 
   test("resolve uses jdkToolchain config from compiler plugin") {
@@ -370,7 +412,7 @@ class JavaHomeResolverSuite extends AnyFunSuite {
       false,
       mojoWithActiveToolchain("/fake/session-jdk"),
     )
-    assert(result == Some(forkJdk.toString))
+    assert(result == Some(canonicalHome(forkJdk)))
   }
 
   test(
@@ -428,9 +470,99 @@ class JavaHomeResolverSuite extends AnyFunSuite {
     assert(result == Some(tcJdkHome))
   }
 
+  test("resolve chooses toolchains plugin execution for main or test") {
+    val mainJdkHome = "/fake/jdk17-main"
+    val testJdkHome = "/fake/jdk21-test"
+
+    val tcPlugin = new Plugin()
+    tcPlugin.setGroupId("org.apache.maven.plugins")
+    tcPlugin.setArtifactId("maven-toolchains-plugin")
+    tcPlugin.addExecution(
+      execution(
+        id = "default-compile",
+        goal = "toolchain",
+        phase = "compile",
+        node(
+          "configuration",
+          node("toolchains", node("jdk", node("version", "17"))),
+        ),
+      )
+    )
+    tcPlugin.addExecution(
+      execution(
+        id = "default-testCompile",
+        goal = "toolchain",
+        phase = "test-compile",
+        node(
+          "configuration",
+          node("toolchains", node("jdk", node("version", "21"))),
+        ),
+      )
+    )
+
+    val project = new MavenProject()
+    project.setBuild(new Build())
+    project.getBuild.addPlugin(tcPlugin)
+    val mojo = mojoWithToolchains(
+      Map(
+        Map("version" -> "17") -> mainJdkHome,
+        Map("version" -> "21") -> testJdkHome,
+      )
+    )
+
+    assert(
+      JavaHomeResolver.resolve(Nil, project, false, mojo) == Some(mainJdkHome)
+    )
+    assert(
+      JavaHomeResolver.resolve(Nil, project, true, mojo) == Some(testJdkHome)
+    )
+  }
+
+  test("resolve merges toolchains plugin execution and plugin config") {
+    val jdkHome = "/fake/jdk17-temurin"
+
+    val tcPlugin = new Plugin()
+    tcPlugin.setGroupId("org.apache.maven.plugins")
+    tcPlugin.setArtifactId("maven-toolchains-plugin")
+    tcPlugin.setConfiguration(
+      node(
+        "configuration",
+        node("toolchains", node("jdk", node("vendor", "temurin"))),
+      )
+    )
+    tcPlugin.addExecution(
+      execution(
+        id = "default-compile",
+        goal = "toolchain",
+        phase = "compile",
+        node(
+          "configuration",
+          node("toolchains", node("jdk", node("version", "17"))),
+        ),
+      )
+    )
+
+    val project = new MavenProject()
+    project.setBuild(new Build())
+    project.getBuild.addPlugin(tcPlugin)
+
+    val result = JavaHomeResolver.resolve(
+      Nil,
+      project,
+      false,
+      mojoWithToolchains(
+        Map(Map("version" -> "17", "vendor" -> "temurin") -> jdkHome)
+      ),
+    )
+    assert(result == Some(jdkHome))
+  }
+
   private def nullMojo: MbtMojo = mojoWithToolchains(Map.empty)
 
   private def mojoWithActiveToolchain(jdkHome: String): MbtMojo =
+    mojoWithActiveJavaTool(Path.of(s"$jdkHome/bin/java"))
+
+  private def mojoWithActiveJavaTool(javaPath: Path): MbtMojo =
     new MbtMojo {
       override def getLog = new SystemStreamLog()
       override def getReactorProjects = ju.Collections.emptyList()
@@ -445,7 +577,7 @@ class JavaHomeResolverSuite extends AnyFunSuite {
           override def getToolchainFromBuildContext(
               t: String,
               s: MavenSession,
-          ): Toolchain = mkToolchain(jdkHome)
+          ): Toolchain = mkToolchainFromJava(javaPath.toString)
           override def getToolchains(
               s: MavenSession,
               t: String,
@@ -488,6 +620,12 @@ class JavaHomeResolverSuite extends AnyFunSuite {
     override def getType = "jdk"
     override def findTool(name: String): String =
       if (name == "java") s"$jdkHome/bin/java" else null
+  }
+
+  private def mkToolchainFromJava(javaPath: String): Toolchain = new Toolchain {
+    override def getType = "jdk"
+    override def findTool(name: String): String =
+      if (name == "java") javaPath else null
   }
 
   private def fakeJdk(
@@ -557,6 +695,29 @@ class JavaHomeResolverSuite extends AnyFunSuite {
     exec.setConfiguration(configuration)
     exec
   }
+
+  private def execution(
+      id: String,
+      goal: String,
+      phase: String,
+      configuration: Xpp3Dom,
+  ): PluginExecution = {
+    val exec = execution(id, goal, configuration)
+    exec.setPhase(phase)
+    exec
+  }
+
+  private def createSymbolicLink(link: Path, target: Path): Path =
+    try Files.createSymbolicLink(link, target)
+    catch {
+      case _: UnsupportedOperationException =>
+        cancel("symbolic links are not supported on this filesystem")
+      case _: SecurityException =>
+        cancel("symbolic links are not allowed on this filesystem")
+    }
+
+  private def canonicalHome(path: Path): String =
+    JavaHomeResolver.canonicalizePath(path.toString).toString
 
   private def node(name: String, value: String): Xpp3Dom = {
     val dom = new Xpp3Dom(name)
