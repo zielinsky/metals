@@ -3,11 +3,96 @@ package scala.meta.metals.maven
 import org.apache.maven.model.Build
 import org.apache.maven.model.Plugin
 import org.apache.maven.model.PluginExecution
+import org.apache.maven.model.PluginManagement
 import org.apache.maven.project.MavenProject
 import org.codehaus.plexus.util.xml.Xpp3Dom
 import org.scalatest.funsuite.AnyFunSuite
 
 class MavenCompilerConfigSuite extends AnyFunSuite {
+
+  test(
+    "returns empty compiler config when no Maven compiler plugins are present"
+  ) {
+    val config = MavenCompilerConfig.extract(new MavenProject(), isTest = false)
+
+    assert(config == CompilerConfig(Nil, Nil, None))
+  }
+
+  test("extracts javac options from Maven properties without compiler plugin") {
+    val project = new MavenProject()
+    project.getProperties.setProperty("maven.compiler.release", "11")
+    project.getProperties.setProperty("maven.compiler.source", "8")
+    project.getProperties.setProperty("maven.compiler.target", "8")
+    project.getProperties.setProperty("maven.compiler.encoding", "ISO-8859-1")
+    project.getProperties.setProperty("air.compiler.enable-preview", "true")
+    project.getProperties.setProperty("maven.compiler.parameters", "true")
+
+    val config = MavenCompilerConfig.extract(project, isTest = false)
+
+    assert(
+      config.javacOptions == List(
+        "--release", "11", "-encoding", "ISO-8859-1", "--enable-preview",
+        "-parameters",
+      )
+    )
+  }
+
+  test("extracts source and target when release is not configured") {
+    val project = new MavenProject()
+    project.setBuild(new Build())
+    project.getProperties.setProperty("maven.compiler.source", "8")
+    project.getProperties.setProperty("maven.compiler.target", "11")
+    project.getProperties.setProperty("project.build.sourceEncoding", "UTF-8")
+
+    val config = MavenCompilerConfig.extract(project, isTest = false)
+
+    assert(
+      config.javacOptions == List(
+        "-source", "8", "-target", "11", "-encoding", "UTF-8",
+      )
+    )
+  }
+
+  test(
+    "reads compiler plugins from pluginManagement and lets build plugins override"
+  ) {
+    val project = new MavenProject()
+    val build = new Build()
+    val pluginManagement = new PluginManagement()
+    pluginManagement.addPlugin(
+      plugin(
+        "org.apache.maven.plugins",
+        "maven-compiler-plugin",
+        configuration("release" -> "8"),
+      )
+    )
+    pluginManagement.addPlugin(
+      plugin(
+        "net.alchim31.maven",
+        "scala-maven-plugin",
+        node(
+          "configuration",
+          node("scalaCompatVersion", "2.13"),
+          node("addScalacArgs", " | -Wunused | "),
+        ),
+      )
+    )
+    build.setPluginManagement(pluginManagement)
+    build.addPlugin(
+      plugin(
+        "org.apache.maven.plugins",
+        "maven-compiler-plugin",
+        configuration("release" -> "17"),
+      )
+    )
+    project.setBuild(build)
+
+    val config = MavenCompilerConfig.extract(project, isTest = false)
+
+    assert(config.javacOptions == List("--release", "17"))
+    assert(config.scalacOptions == List("-Wunused"))
+    assert(config.scalaVersion == Some("2.13"))
+  }
 
   test("extracts javac and scalac options from Maven plugin configuration") {
     val project = new MavenProject()

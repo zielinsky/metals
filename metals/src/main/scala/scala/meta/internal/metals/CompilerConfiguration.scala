@@ -61,7 +61,7 @@ class CompilerConfiguration(
     mtags: () => Mtags,
 )(implicit ec: ExecutionContextExecutorService, rc: ReportContext) {
 
-  var onPcLoaded: BuildTargetIdentifier => Unit = _ => ()
+  private[metals] var onPcLoaded: BuildTargetIdentifier => Unit = _ => ()
 
   private val plugins = new CompilerPlugins()
   val fallbackClasspaths = new FallbackClasspaths(

@@ -1,6 +1,7 @@
 package scala.meta.metals.maven
 
-import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
 
 import org.apache.maven.model.Build
 import org.apache.maven.model.Plugin
@@ -22,6 +23,15 @@ class MavenSourceRootsSuite extends AnyFunSuite {
     build.setDirectory(buildDir)
     build.setSourceDirectory(s"$buildDir/../src/main/java")
     build.setTestSourceDirectory(s"$buildDir/../src/test/java")
+    p.setBuild(build)
+    p
+  }
+
+  private def projectAt(workspace: Path): MavenProject = {
+    val p = new MavenProject()
+    p.setFile(workspace.resolve("pom.xml").toFile)
+    val build = new Build()
+    build.setDirectory(workspace.resolve("target").toString)
     p.setBuild(build)
     p
   }
@@ -71,6 +81,61 @@ class MavenSourceRootsSuite extends AnyFunSuite {
       if (isTest) p.getTestCompileSourceRoots
       else p.getCompileSourceRoots
     MavenSourceRoots.existingSources(rawRoots, p, isTest)
+  }
+
+  test(
+    "existing declared roots are filtered and Scala fallback is added once"
+  ) {
+    val workspace = Files.createTempDirectory("maven-source-roots-existing")
+    val mainJava = Files.createDirectories(workspace.resolve("src/main/java"))
+    val mainScala = Files.createDirectories(workspace.resolve("src/main/scala"))
+    val missing = workspace.resolve("src/main/missing")
+    val p = projectAt(workspace)
+    p.addCompileSourceRoot(mainJava.toString)
+    p.addCompileSourceRoot(missing.toString)
+
+    val roots = sourceRoots(p, isTest = false)
+
+    assert(
+      roots == List(
+        mainJava.toFile.getAbsolutePath,
+        mainScala.toFile.getAbsolutePath,
+      )
+    )
+  }
+
+  test(
+    "generated source scan detects parent, nested layout, Kotlin and Groovy"
+  ) {
+    val workspace = Files.createTempDirectory("maven-generated-source-roots")
+    val generated = workspace.resolve("target/generated-sources")
+    Files.createDirectories(generated)
+    Files.writeString(generated.resolve("Top.kt"), "class Top")
+    val nestedJava =
+      Files.createDirectories(generated.resolve("openapi/src/main/java"))
+    Files.writeString(nestedJava.resolve("OpenApi.java"), "class OpenApi {}")
+    val directGroovy = Files.createDirectories(generated.resolve("gmaven"))
+    Files.writeString(directGroovy.resolve("Script.groovy"), "class Script {}")
+    val p = projectAt(workspace)
+
+    val roots = sourceRoots(p, isTest = false)
+
+    assert(roots.contains(generated.toFile.getAbsolutePath))
+    assert(roots.contains(nestedJava.toFile.getAbsolutePath))
+    assert(roots.contains(directGroovy.toFile.getAbsolutePath))
+  }
+
+  test("antlr default root is added for main sources only") {
+    val p = project()
+    val plugin = pluginWith(Antlr4MavenPlugin, node("configuration"))
+    plugin.addExecution(executionWith("antlr4", node("configuration")))
+    p.getBuild.addPlugin(plugin)
+
+    val mainRoots = sourceRoots(p, isTest = false)
+    val testRoots = sourceRoots(p, isTest = true)
+
+    assert(mainRoots.contains("/project/target/generated-sources/antlr4"))
+    assert(!testRoots.contains("/project/target/generated-sources/antlr4"))
   }
 
   // ── annotation processing ────────────────────────────────────────────────
@@ -297,6 +362,117 @@ class MavenSourceRootsSuite extends AnyFunSuite {
     val roots = sourceRoots(p, isTest = false)
     assert(roots.contains("/out/a"))
     assert(roots.contains("/out/b"))
+  }
+
+  // ── build-helper ─────────────────────────────────────────────────────────
+
+  test("build-helper: add-source contributes to main roots only") {
+    val p = project()
+    val plugin = pluginWith(BuildHelperMavenPlugin, node("configuration"))
+    plugin.addExecution(
+      executionWith(
+        "add-source",
+        node(
+          "configuration",
+          node(
+            "sources",
+            node("source", "/project/src/generated/scala"),
+            node("source", "/project/src/extra/java"),
+          ),
+        ),
+      )
+    )
+    p.getBuild.addPlugin(plugin)
+
+    val mainRoots = sourceRoots(p, isTest = false)
+    val testRoots = sourceRoots(p, isTest = true)
+
+    assert(mainRoots.contains("/project/src/generated/scala"))
+    assert(mainRoots.contains("/project/src/extra/java"))
+    assert(!testRoots.contains("/project/src/generated/scala"))
+    assert(!testRoots.contains("/project/src/extra/java"))
+  }
+
+  test("build-helper: add-test-source contributes to test roots only") {
+    val p = project()
+    val plugin = pluginWith(BuildHelperMavenPlugin, node("configuration"))
+    plugin.addExecution(
+      executionWith(
+        "add-test-source",
+        node(
+          "configuration",
+          node(
+            "sources",
+            node("source", "/project/src/generated-test/scala"),
+          ),
+        ),
+      )
+    )
+    p.getBuild.addPlugin(plugin)
+
+    val testRoots = sourceRoots(p, isTest = true)
+    val mainRoots = sourceRoots(p, isTest = false)
+
+    assert(testRoots.contains("/project/src/generated-test/scala"))
+    assert(!mainRoots.contains("/project/src/generated-test/scala"))
+  }
+
+  test(
+    "build-helper: add-source and add-test-source in same plugin are segregated"
+  ) {
+    val p = project()
+    val plugin = pluginWith(BuildHelperMavenPlugin, node("configuration"))
+    plugin.addExecution(
+      executionWith(
+        "add-source",
+        node(
+          "configuration",
+          node("sources", node("source", "/project/src/gen/main")),
+        ),
+      )
+    )
+    plugin.addExecution(
+      executionWith(
+        "add-test-source",
+        node(
+          "configuration",
+          node("sources", node("source", "/project/src/gen/test")),
+        ),
+      )
+    )
+    p.getBuild.addPlugin(plugin)
+
+    val mainRoots = sourceRoots(p, isTest = false)
+    val testRoots = sourceRoots(p, isTest = true)
+
+    assert(mainRoots.contains("/project/src/gen/main"))
+    assert(!mainRoots.contains("/project/src/gen/test"))
+    assert(testRoots.contains("/project/src/gen/test"))
+    assert(!testRoots.contains("/project/src/gen/main"))
+  }
+
+  test(
+    "build-helper: source path relative to project basedir is resolved correctly"
+  ) {
+    val workspace = Files.createTempDirectory("maven-build-helper-relative")
+    val p = projectAt(workspace)
+    val plugin = pluginWith(BuildHelperMavenPlugin, node("configuration"))
+    plugin.addExecution(
+      executionWith(
+        "add-source",
+        node(
+          "configuration",
+          node("sources", node("source", "src/generated/scala")),
+        ),
+      )
+    )
+    p.getBuild.addPlugin(plugin)
+
+    val mainRoots = sourceRoots(p, isTest = false)
+
+    assert(
+      mainRoots.contains(workspace.resolve("src/generated/scala").toString)
+    )
   }
 
   // ── pluginManagement inheritance (multi-module pattern) ──────────────────

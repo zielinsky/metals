@@ -2,8 +2,6 @@ package scala.meta.metals.maven
 
 import java.{util => ju}
 
-import scala.jdk.CollectionConverters._
-
 import org.apache.maven.model.Plugin
 import org.apache.maven.project.MavenProject
 

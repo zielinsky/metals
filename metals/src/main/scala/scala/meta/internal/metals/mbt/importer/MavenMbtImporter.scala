@@ -46,17 +46,18 @@ abstract class MavenMbtImporter(
       )
       .future
       .flatMap { code =>
-        if (Files.exists(out.toNIO)) Future.successful(())
-        else if (code == ExitCodes.Cancel)
+        if (code == ExitCodes.Cancel)
           Future.failed(
             new java.util.concurrent.CancellationException(
               "mbt-maven-export was cancelled"
             )
           )
+        else if (code == ExitCodes.Success && Files.exists(out.toNIO))
+          Future.successful(())
         else
           Future.failed(
             new Exception(
-              s"mbt-maven-export failed with exit code $code and no output was produced"
+              s"mbt-maven-export failed with exit code $code"
             )
           )
       }

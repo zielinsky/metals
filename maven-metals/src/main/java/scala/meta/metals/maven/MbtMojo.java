@@ -41,10 +41,10 @@ public class MbtMojo extends AbstractMojo {
   private File outputFile;
 
   /**
-   * Whether to resolve and attach sources JARs for external dependencies. Disabled by default for
-   * fast imports; enable with -DdownloadSources=true.
+   * Whether to resolve and attach sources JARs for external dependencies. Enabled by default;
+   * disable with -DdownloadSources=false.
    */
-  @Parameter(property = "downloadSources", defaultValue = "false")
+  @Parameter(property = "downloadSources", defaultValue = "true")
   private boolean downloadSources;
 
   @Component private RepositorySystem repoSystem;

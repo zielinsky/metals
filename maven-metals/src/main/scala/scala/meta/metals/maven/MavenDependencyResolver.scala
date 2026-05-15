@@ -62,15 +62,13 @@ private[maven] object MavenDependencyResolver {
       .distinct
 
     val localFiles = keys.flatMap { key =>
-      Option(
-        localArtifactPath(
-          localRepoBase,
-          key.groupId,
-          key.artifactId,
-          key.version,
-          key.classifier,
-          key.extension,
-        )
+      localArtifactPath(
+        localRepoBase,
+        key.groupId,
+        key.artifactId,
+        key.version,
+        key.classifier,
+        key.extension,
       ).map(key -> _)
     }.toMap
 
@@ -101,36 +99,37 @@ private[maven] object MavenDependencyResolver {
         a: String,
         v: String,
         classifier: String,
-        file: File,
-    ): Unit = {
-      if (v == null || v.isEmpty || file == null) return
-      val id = artifactId(g, a, v, classifier)
-      if (!depModuleMap.containsKey(id)) {
-        if (!file.exists()) {
+        fileOpt: Option[File],
+    ): Unit =
+      for {
+        _ <- Option(v).filter(_.nonEmpty)
+        file <- fileOpt
+        id = artifactId(g, a, v, classifier)
+      } {
+        if (depModuleMap.containsKey(id)) {
+          depModuleIds += id
+        } else if (!file.exists()) {
           log.debug(s"metals-maven-plugin: $id not found, skipping")
-          return
-        }
-        if (!isJar(file)) {
+        } else if (!isJar(file)) {
           log.debug(s"metals-maven-plugin: $id is not a JAR, skipping")
-          return
+        } else {
+          val sourcesJar = sourcesCache
+            .get(s"$g:$a:$v")
+            .orElse {
+              val f = localSourcesJarPath(localRepoBase, g, a, v)
+              if (f.isFile) Some(f) else None
+            }
+          depModuleMap.put(
+            id,
+            DepModuleEntry(
+              id = id,
+              jar = file.toURI.toString,
+              sources = sourcesJar.map(_.toURI.toString).orNull,
+            ),
+          )
+          depModuleIds += id
         }
-        val sourcesJar = sourcesCache
-          .get(s"$g:$a:$v")
-          .orElse {
-            val f = localSourcesJarPath(localRepoBase, g, a, v)
-            if (f.isFile) Some(f) else None
-          }
-        depModuleMap.put(
-          id,
-          DepModuleEntry(
-            id = id,
-            jar = file.toURI.toString,
-            sources = sourcesJar.map(_.toURI.toString).orNull,
-          ),
-        )
       }
-      depModuleIds += id
-    }
 
     val allArtifacts = project.getArtifacts.asScala
 
@@ -144,10 +143,7 @@ private[maven] object MavenDependencyResolver {
           val key = artifactKey(a)
           val file = Option(a.getFile)
             .filter(_.isFile)
-            .orElse(
-              artifactFiles.get(key)
-            )
-            .orNull
+            .orElse(artifactFiles.get(key))
           registerExternal(
             a.getGroupId,
             a.getArtifactId,
@@ -333,8 +329,8 @@ private[maven] object MavenDependencyResolver {
       v: String,
       classifier: Option[String],
       extension: String,
-  ): File = {
-    if (extension != "jar") null
+  ): Option[File] =
+    if (extension != "jar") None
     else {
       val classifierSuffix = classifier.map("-" + _).getOrElse("")
       // Resolved SNAPSHOT versions (e.g. 1.5.14-20260226.050240-62) are stored
@@ -344,9 +340,8 @@ private[maven] object MavenDependencyResolver {
         base,
         s"${g.replace('.', '/')}/$a/$dir/$a-$v$classifierSuffix.$extension",
       )
-      if (jar.isFile) jar else null
+      Option.when(jar.isFile)(jar)
     }
-  }
 
   private def isJar(file: File): Boolean =
     file.getName.endsWith(".jar")

@@ -111,52 +111,37 @@ addCommandAlias(
   "+publishLocal; metals/runMain scala.meta.metals.DownloadDependencies ",
 )
 
-def runMavenMetals(
-    base: File,
-    version: String,
-    scalaVersion: String,
-    goals: Seq[String],
-    log: Logger,
-): Unit = {
-  val command =
-    Seq(
-      "mvn",
-      "-q",
-      "-Dflatten.skip=true",
-      "-f",
-      (base / "maven-metals" / "pom.xml").getAbsolutePath,
-      s"-Drevision=$version",
-      s"-Dversion.scala=$scalaVersion",
-    ) ++ goals
-  log.info(command.mkString(" "))
-  val exitCode = Process(command, base).!
-  if (exitCode != 0)
-    sys.error(s"maven-metals failed with exit code $exitCode")
-}
-
 lazy val `maven-metals` = project
   .in(file("maven-metals"))
+  .settings(sharedSettings)
   .settings(
-    Compile / scalafix / skip := true,
-    Test / scalafix / skip := true,
-    publishLocal := Def.task {
-      runMavenMetals(
-        (ThisBuild / baseDirectory).value,
-        version.value,
-        V.scala213,
-        Seq("install"),
-        streams.value.log,
+    moduleName := "metals-maven-plugin",
+    crossPaths := false,
+    publish / skip := false,
+    publishLocal := publishM2.value,
+    testFrameworks := List(new TestFramework("org.scalatest.tools.Framework")),
+    libraryDependencies ++= List(
+      "org.apache.maven" % "maven-core" % "3.9.5" % "provided",
+      "org.apache.maven" % "maven-plugin-api" % "3.9.5" % "provided",
+      "org.apache.maven.plugin-tools" % "maven-plugin-annotations" % "3.15.1" % "provided",
+      "org.apache.maven" % "maven-model" % "3.9.5" % "provided",
+      "com.google.code.gson" % "gson" % "2.14.0",
+      "org.scalatest" %% "scalatest" % "3.2.15" % Test,
+    ),
+    Compile / resourceGenerators += Def.task {
+      val template = IO.read(
+        (Compile / sourceDirectory).value / "plugin-xml" / "META-INF" / "maven" / "plugin.xml"
       )
-    }.value,
-    Test / test := Def.task {
-      runMavenMetals(
-        (ThisBuild / baseDirectory).value,
-        version.value,
-        V.scala213,
-        Seq("test"),
-        streams.value.log,
+      val dest =
+        (Compile / resourceManaged).value / "META-INF" / "maven" / "plugin.xml"
+      IO.write(
+        dest,
+        template
+          .replace("@@VERSION@@", version.value)
+          .replace("@@SCALA_VERSION@@", V.scala213),
       )
-    }.value,
+      Seq(dest)
+    }.taskValue,
   )
 
 def configureMtagsScalaVersionDynamically(

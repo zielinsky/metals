@@ -113,8 +113,11 @@ jobs:
             os: ubuntu-latest
             java: "17"
           - type: maven-metals
-            command: mvn -q -Dflatten.skip=true -f maven-metals/pom.xml test
-            name: Maven Metals tests
+            command: |
+              sbt maven-metals/test
+              bin/test.sh quick-publish-local
+              bin/test.sh 'slow/testOnly -- tests.maven.MavenMbtSuite'
+            name: Maven integration
             os: ubuntu-latest
             java: "17"
           - type: scalafix

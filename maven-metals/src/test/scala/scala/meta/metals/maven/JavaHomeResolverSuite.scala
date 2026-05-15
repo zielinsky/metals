@@ -1,5 +1,6 @@
 package scala.meta.metals.maven
 
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.{util => ju}
@@ -10,14 +11,30 @@ import org.apache.maven.execution.MavenSession
 import org.apache.maven.model.Build
 import org.apache.maven.model.Plugin
 import org.apache.maven.model.PluginExecution
+import org.apache.maven.plugin.logging.Log
 import org.apache.maven.plugin.logging.SystemStreamLog
 import org.apache.maven.project.MavenProject
 import org.apache.maven.toolchain.Toolchain
 import org.apache.maven.toolchain.ToolchainManager
 import org.codehaus.plexus.util.xml.Xpp3Dom
+import org.eclipse.aether.RepositorySystem
+import org.eclipse.aether.RepositorySystemSession
 import org.scalatest.funsuite.AnyFunSuite
 
 class JavaHomeResolverSuite extends AnyFunSuite {
+
+  test("selects the first candidate when project has no JDK requirements") {
+    val selected = JavaHomeResolver.selectJavaHome(
+      project = {
+        val project = new MavenProject()
+        project.setBuild(new Build())
+        project
+      },
+      candidates = List("/fake/jdk-17", "/fake/jdk-21"),
+    )
+
+    assert(selected == Some("/fake/jdk-17"))
+  }
 
   test("selects a JDK satisfying version and enforcer vendor requirements") {
     val workspace = Files.createTempDirectory("jdk-selection")
@@ -264,6 +281,44 @@ class JavaHomeResolverSuite extends AnyFunSuite {
     assert(selected == Some(temurin.toString))
   }
 
+  test(
+    "selectJavaHome uses the highest version requirement from project properties"
+  ) {
+    val workspace = Files.createTempDirectory("jdk-max-version")
+    val jdk17 = fakeJdk(workspace, "jdk-17", "17.0.12", "Oracle Corporation")
+    val jdk21 = fakeJdk(workspace, "jdk-21", "21.0.8", "Oracle Corporation")
+    val project = new MavenProject()
+    project.getProperties.setProperty("java.version", "17")
+    project.getProperties.setProperty("jdk.version", "21")
+    project.setBuild(new Build())
+
+    val selected = JavaHomeResolver.selectJavaHome(
+      project,
+      List(jdk17.toString, jdk21.toString),
+    )
+
+    assert(selected == Some(jdk21.toString))
+  }
+
+  test("selectJavaHome reads JDK release metadata from parent directory") {
+    val workspace = Files.createTempDirectory("jdk-parent-release")
+    val contents = Files.createDirectories(workspace.resolve("jdk/Contents"))
+    val home = Files.createDirectories(contents.resolve("Home"))
+    Files.writeString(
+      contents.resolve("release"),
+      """|JAVA_VERSION="21.0.8"
+         |IMPLEMENTOR="GraalVM Community"
+         |""".stripMargin,
+    )
+
+    val selected = JavaHomeResolver.selectJavaHome(
+      projectWithJavaRequirement(version = "21", vendors = List("graalvm")),
+      List(home.toString),
+    )
+
+    assert(selected == Some(home.toString))
+  }
+
   test("javacOptionsRequirements extracts version from --release and -source") {
     assert(
       JavaHomeResolver.javacOptionsRequirements(List("--release", "21")) ==
@@ -470,6 +525,31 @@ class JavaHomeResolverSuite extends AnyFunSuite {
     assert(result == Some(tcJdkHome))
   }
 
+  test("resolve uses neutral toolchains plugin execution for main and test") {
+    val jdkHome = "/fake/jdk19-neutral"
+    val tcPlugin = new Plugin()
+    tcPlugin.setGroupId("org.apache.maven.plugins")
+    tcPlugin.setArtifactId("maven-toolchains-plugin")
+    tcPlugin.addExecution(
+      execution(
+        id = "select-jdk",
+        goal = "toolchain",
+        node(
+          "configuration",
+          node("toolchains", node("jdk", node("version", "19"))),
+        ),
+      )
+    )
+
+    val project = new MavenProject()
+    project.setBuild(new Build())
+    project.getBuild.addPlugin(tcPlugin)
+    val mojo = mojoWithToolchains(Map(Map("version" -> "19") -> jdkHome))
+
+    assert(JavaHomeResolver.resolve(Nil, project, false, mojo) == Some(jdkHome))
+    assert(JavaHomeResolver.resolve(Nil, project, true, mojo) == Some(jdkHome))
+  }
+
   test("resolve chooses toolchains plugin execution for main or test") {
     val mainJdkHome = "/fake/jdk17-main"
     val testJdkHome = "/fake/jdk21-test"
@@ -564,13 +644,13 @@ class JavaHomeResolverSuite extends AnyFunSuite {
 
   private def mojoWithActiveJavaTool(javaPath: Path): MbtMojo =
     new MbtMojo {
-      override def getLog = new SystemStreamLog()
+      override def getLog: Log = new SystemStreamLog()
       override def getReactorProjects = ju.Collections.emptyList()
-      override def getOutputFile = null
+      override def getOutputFile: File = null
       override def isDownloadSources = false
-      override def getRepoSystem = null
-      override def getRepositorySession = null
-      override def getLocalRepositoryBasedir = null
+      override def getRepoSystem: RepositorySystem = null
+      override def getRepositorySession: RepositorySystemSession = null
+      override def getLocalRepositoryBasedir: File = null
       override def getSession: MavenSession = null
       override def getToolchainManager: ToolchainManager =
         new ToolchainManager {
@@ -590,13 +670,13 @@ class JavaHomeResolverSuite extends AnyFunSuite {
       byReqs: Map[Map[String, String], String]
   ): MbtMojo =
     new MbtMojo {
-      override def getLog = new SystemStreamLog()
+      override def getLog: Log = new SystemStreamLog()
       override def getReactorProjects = ju.Collections.emptyList()
-      override def getOutputFile = null
+      override def getOutputFile: File = null
       override def isDownloadSources = false
-      override def getRepoSystem = null
-      override def getRepositorySession = null
-      override def getLocalRepositoryBasedir = null
+      override def getRepoSystem: RepositorySystem = null
+      override def getRepositorySession: RepositorySystemSession = null
+      override def getLocalRepositoryBasedir: File = null
       override def getSession: MavenSession = null
       override def getToolchainManager: ToolchainManager =
         new ToolchainManager {

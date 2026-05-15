@@ -19,11 +19,15 @@ object MavenDigest extends Digestable {
 
     val mvnDir = workspace.resolve(".mvn")
     val digestedMvn =
-      List("toolchains.xml", "maven.config", "jvm.config", "extensions.xml")
+      List("toolchains.xml", "extensions.xml")
         .forall { name =>
           Digest.digestFile(mvnDir.resolve(name), digest)
-        }
+        } &&
+        List("maven.config", "jvm.config")
+          .forall { name =>
+            Digest.digestFileBytes(mvnDir.resolve(name), digest)
+          }
 
-    digestedPoms & digestedMvn
+    digestedPoms && digestedMvn
   }
 }
